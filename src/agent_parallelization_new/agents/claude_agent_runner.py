@@ -1,0 +1,266 @@
+"""Run a Claude Code sub-agent session.
+
+Replaces run_single_agent.sh + OpenClaw invocation entirely.
+Uses `claude --print` (non-interactive) with session continuation to run
+a multi-turn agent loop that manages its own time budget.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import sys
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Optional
+
+from agent_parallelization_new.agents.base import AgentRunner
+from agent_parallelization_new.budgeting import BudgetTracker
+from agent_parallelization_new.config import AgentConfig
+
+
+class ClaudeAgentRunner(AgentRunner):
+    """Runs a Claude Code sub-agent via the `claude` CLI.
+
+    The agent is invoked in a loop:
+    - First turn: full first_message with context
+    - Subsequent turns: "Continue. ~N min remaining. Keep experimenting."
+    - Budget clock starts after first successful turn
+
+    Failure modes handled:
+    - API errors: retry with exponential backoff (no time refund)
+    - Rate limits: backoff aggressively (no time refund)
+    - No-reply turns: track count, rotate session after MAX_NOREPLY
+    - Budget exceeded: break loop
+    - Startup timeout: exit(2)
+    """
+
+    MAX_NOREPLY = 5
+    MIN_TURN_INTERVAL_SEC = 5
+    INITIAL_BACKOFF_SEC = 5
+    MAX_BACKOFF_SEC = 60
+    FIRST_TURN_TIMEOUT_SEC = 300  # 5 min for first turn (compilation etc.)
+    MAX_TURN_TIMEOUT_SEC = 900    # 15 min per subsequent turn
+
+    def run(
+        self,
+        run_id: str,
+        experiment_id: str,
+        system_prompt: str,
+        first_message: str,
+    ) -> None:
+        """Run the agent loop until budget expires. Writes metadata.json at end."""
+        config = self.config
+        budget = BudgetTracker(
+            wall_clock_budget_seconds=config.time_budget_minutes * 60,
+            train_time_budget_seconds=config.train_time_budget_seconds,
+            startup_deadline_seconds=600,
+        )
+
+        # Unique session ID (never shared between agents)
+        session_id = f"{experiment_id}-{config.agent_id}-{int(time.time())}-{os.getpid()}"
+
+        env = self._build_env(run_id, experiment_id)
+        session_log = self.logs_dir / "run_agent.log"
+
+        start_time = datetime.now(timezone.utc).isoformat()
+        total_turns = 0
+        backoff = self.INITIAL_BACKOFF_SEC
+        noreply_count = 0
+        first_turn = True
+
+        with open(session_log, "w") as log_fh:
+            log_fh.write(f"[{config.agent_id}] Session starting: {session_id}\n")
+            log_fh.flush()
+
+            while True:
+                # Hard wall-clock cap
+                if budget.startup_expired():
+                    msg = f"[{config.agent_id}] ABORT: no successful turn within startup deadline.\n"
+                    log_fh.write(msg)
+                    sys.stderr.write(msg)
+                    break
+
+                if budget.should_stop():
+                    log_fh.write(f"[{config.agent_id}] Budget expired — stopping.\n")
+                    break
+
+                # Build turn message
+                if first_turn:
+                    turn_msg = first_message
+                    turn_timeout = self.FIRST_TURN_TIMEOUT_SEC
+                else:
+                    mins_left = budget.remaining_minutes()
+                    turn_msg = (
+                        f"Continue the research. ~{mins_left} min remaining in budget. "
+                        f"Keep modifying train.py and running experiments to improve val_bpb. "
+                        f"Do NOT stop until time runs out."
+                    )
+                    remaining = budget.remaining_seconds()
+                    turn_timeout = min(int(remaining), self.MAX_TURN_TIMEOUT_SEC)
+
+                turn_start = time.monotonic()
+                exit_code, output = self._run_turn(
+                    turn_msg=turn_msg,
+                    session_id=session_id,
+                    system_prompt=system_prompt,
+                    timeout_seconds=turn_timeout,
+                    env=env,
+                )
+                turn_elapsed = time.monotonic() - turn_start
+
+                log_fh.write(
+                    f"[{config.agent_id}] Turn {total_turns}: exit={exit_code} elapsed={turn_elapsed:.1f}s\n"
+                )
+                if output:
+                    log_fh.write(output[:2000] + ("\n...(truncated)\n" if len(output) > 2000 else "\n"))
+                log_fh.flush()
+
+                is_noreply = "No reply from agent" in output or (not output.strip() and exit_code == 0)
+                is_ratelimit = "rate limit" in output.lower() or "rate_limit" in output.lower()
+                is_error = exit_code != 0
+
+                if is_error:
+                    log_fh.write(f"[{config.agent_id}] Error turn, retrying in {backoff}s...\n")
+                    time.sleep(backoff)
+                    backoff = min(backoff * 2, self.MAX_BACKOFF_SEC)
+                elif is_ratelimit:
+                    log_fh.write(f"[{config.agent_id}] Rate limit, backing off {backoff}s...\n")
+                    time.sleep(backoff)
+                    backoff = min(backoff * 2, self.MAX_BACKOFF_SEC)
+                elif is_noreply:
+                    noreply_count += 1
+                    log_fh.write(f"[{config.agent_id}] No-reply turn #{noreply_count}/{self.MAX_NOREPLY}\n")
+                    if noreply_count >= self.MAX_NOREPLY:
+                        noreply_count = 0
+                        session_id = f"{experiment_id}-{config.agent_id}-{int(time.time())}-{os.getpid()}"
+                        first_turn = True
+                        log_fh.write(f"[{config.agent_id}] Session rotated to {session_id}\n")
+                    _enforce_min_interval(turn_elapsed, self.MIN_TURN_INTERVAL_SEC)
+                else:
+                    # Successful turn
+                    backoff = self.INITIAL_BACKOFF_SEC
+                    noreply_count = 0
+                    total_turns += 1
+
+                    if not budget.budget_started():
+                        budget.start_budget_clock()
+                        log_fh.write(
+                            f"[{config.agent_id}] Budget clock started — "
+                            f"{budget.wall_clock_budget_seconds}s remaining.\n"
+                        )
+                    first_turn = False
+                    _enforce_min_interval(turn_elapsed, self.MIN_TURN_INTERVAL_SEC)
+
+        end_time = datetime.now(timezone.utc).isoformat()
+        self._write_metadata(
+            run_id=run_id,
+            experiment_id=experiment_id,
+            start_time=start_time,
+            end_time=end_time,
+            total_turns=total_turns,
+            budget_seconds=config.time_budget_minutes * 60,
+        )
+
+    def _run_turn(
+        self,
+        turn_msg: str,
+        session_id: str,
+        system_prompt: str,
+        timeout_seconds: int,
+        env: dict,
+    ) -> tuple[int, str]:
+        """Invoke `claude --print` for one turn. Returns (exit_code, output)."""
+        cmd = [
+            "claude",
+            "--print",
+            "--output-format", "text",
+        ]
+
+        # Pass system prompt if this is a new session (first turn or after rotation)
+        # Claude Code CLI supports --system-prompt flag
+        if system_prompt:
+            cmd += ["--system-prompt", system_prompt]
+
+        cmd += ["--message", turn_msg]
+
+        try:
+            result = subprocess.run(
+                cmd,
+                cwd=str(self.workspace),
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=timeout_seconds,
+            )
+            output = result.stdout
+            if result.stderr:
+                output += "\n[stderr]\n" + result.stderr
+            return result.returncode, output
+        except subprocess.TimeoutExpired:
+            return -1, f"[timeout after {timeout_seconds}s]"
+        except FileNotFoundError:
+            return -2, "[claude CLI not found in PATH]"
+        except Exception as e:
+            return -3, f"[exception: {e}]"
+
+    def _build_env(self, run_id: str, experiment_id: str) -> dict:
+        """Build environment variables for the agent subprocess."""
+        env = os.environ.copy()
+        env["RUN_ID"] = run_id
+        env["AGENT_ID"] = self.config.agent_id
+        env["RESULTS_ROOT"] = str(self.results_dir)
+        env["AUTOSEARCH_TIME_BUDGET"] = str(self.config.train_time_budget_seconds)
+        env["CUDA_VISIBLE_DEVICES"] = self.config.cuda_device
+        env["EXPERIMENT_ID"] = experiment_id
+        # Ensure uv/python3 are findable
+        extra_path = ":".join([
+            str(Path.home() / ".local" / "bin"),
+            str(Path.home() / "miniforge3" / "bin"),
+        ])
+        env["PATH"] = extra_path + ":" + env.get("PATH", "")
+        return env
+
+    def _write_metadata(
+        self,
+        run_id: str,
+        experiment_id: str,
+        start_time: str,
+        end_time: str,
+        total_turns: int,
+        budget_seconds: int,
+    ) -> None:
+        """Write metadata.json to results dir."""
+        metadata = {
+            "agent_id": self.config.agent_id,
+            "run_id": run_id,
+            "experiment_id": experiment_id,
+            "start_time": start_time,
+            "end_time": end_time,
+            "total_turns": total_turns,
+            "budget_seconds": budget_seconds,
+            "model": self.config.model,
+        }
+        meta_path = self.results_dir / "metadata.json"
+        meta_path.write_text(json.dumps(metadata, indent=2))
+
+        # Count training runs from trajectory.jsonl
+        traj_path = self.results_dir / "trajectory.jsonl"
+        if traj_path.exists():
+            lines = [l for l in traj_path.read_text().splitlines() if l.strip()]
+            metadata["total_training_runs"] = len(lines)
+            if lines:
+                import json as _json
+                bpbs = [_json.loads(l).get("val_bpb") for l in lines if l.strip()]
+                bpbs = [b for b in bpbs if b is not None]
+                if bpbs:
+                    metadata["best_val_bpb"] = min(bpbs)
+            meta_path.write_text(json.dumps(metadata, indent=2))
+
+
+def _enforce_min_interval(elapsed: float, min_interval: float) -> None:
+    """Sleep to ensure at least min_interval seconds between turns."""
+    if elapsed < min_interval:
+        time.sleep(min_interval - elapsed)
