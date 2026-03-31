@@ -17,14 +17,10 @@ def _repo_root() -> Path:
     return Path(__file__).parents[3]  # agent_parallelisation_new/
 
 
-def _load_template(name: str) -> str:
-    templates_dir = _repo_root() / "templates"
-    path = templates_dir / name
+def _load_template(path: Path) -> str:
     if not path.exists():
         raise FileNotFoundError(f"Template not found: {path}")
-    text = path.read_text()
-    # Compute TRAIN_TIME_BUDGET_MIN from template (not dynamic here)
-    return text
+    return path.read_text()
 
 
 def _render_first_message(template: str, train_budget_seconds: int) -> str:
@@ -38,31 +34,42 @@ def _make_experiment_id(prefix: str = "exp") -> str:
 
 def main_parallel(argv=None) -> None:
     parser = argparse.ArgumentParser(description="Run parallel-agent experiment (Mode 1)")
+    parser.add_argument("--config", type=str, default=None,
+                        help="Path to experiment.yaml. If provided, all other flags are ignored.")
     parser.add_argument("--time-budget", type=int, default=30, help="Budget per agent (minutes)")
     parser.add_argument("--train-budget", type=int, default=300, help="Budget per training run (seconds)")
+    parser.add_argument("--n-agents", type=int, default=2, help="Number of parallel agents")
     parser.add_argument("--experiment-id", type=str, default=None)
     parser.add_argument("--runs-dir", type=str, default="runs")
     args = parser.parse_args(argv)
 
     repo_root = _repo_root()
-    experiment_id = args.experiment_id or _make_experiment_id("parallel")
-    config = ExperimentConfig.make_parallel(
-        experiment_id=experiment_id,
-        time_budget_minutes=args.time_budget,
-        train_time_budget_seconds=args.train_budget,
-        repo_root=str(repo_root),
-    )
 
-    runs_dir = repo_root / args.runs_dir
-    experiment_dir = runs_dir / f"experiment_{experiment_id}"
+    if args.config:
+        config = ExperimentConfig.from_yaml(Path(args.config), repo_root=str(repo_root))
+    else:
+        experiment_id = args.experiment_id or _make_experiment_id("parallel")
+        config = ExperimentConfig.make_n_parallel(
+            experiment_id=experiment_id,
+            n_agents=args.n_agents,
+            time_budget_minutes=args.time_budget,
+            train_time_budget_seconds=args.train_budget,
+            repo_root=str(repo_root),
+        )
+
+    runs_dir = repo_root / (args.runs_dir if not args.config else "runs")
+    experiment_dir = runs_dir / f"experiment_{config.experiment_id}"
     experiment_dir.mkdir(parents=True, exist_ok=True)
 
-    system_prompt = _load_template("agent_system_prompt.md")
+    system_prompt = _load_template(repo_root / config.system_prompt_file)
     first_message_tmpl = _render_first_message(
-        _load_template("agent_first_message.md"), args.train_budget
+        _load_template(repo_root / config.first_message_file),
+        config.train_time_budget_seconds,
     )
 
-    print(f"[launcher] Starting parallel experiment: {experiment_id}")
+    print(f"[launcher] Starting parallel experiment: {config.experiment_id}")
+    print(f"[launcher] Agents: {len(config.agents)}  |  Budget: {config.base_time_budget_minutes} min  |  Train: {config.train_time_budget_seconds} s")
+    print(f"[launcher] SLURM: partition={config.slurm_partition}  gres={config.slurm_gres}  time={config.slurm_time}")
     print(f"[launcher] Output directory: {experiment_dir}")
 
     run_parallel_experiment(
@@ -77,6 +84,8 @@ def main_parallel(argv=None) -> None:
 
 def main_single_long(argv=None) -> None:
     parser = argparse.ArgumentParser(description="Run single-agent-longer experiment (Mode 2)")
+    parser.add_argument("--config", type=str, default=None,
+                        help="Path to experiment.yaml. If provided, all other flags are ignored.")
     parser.add_argument("--time-budget", type=int, default=30, help="Base budget T (minutes); agent gets 2T")
     parser.add_argument("--train-budget", type=int, default=300, help="Budget per training run (seconds)")
     parser.add_argument("--experiment-id", type=str, default=None)
@@ -84,24 +93,29 @@ def main_single_long(argv=None) -> None:
     args = parser.parse_args(argv)
 
     repo_root = _repo_root()
-    experiment_id = args.experiment_id or _make_experiment_id("single")
-    config = ExperimentConfig.make_single_long(
-        experiment_id=experiment_id,
-        time_budget_minutes=args.time_budget,
-        train_time_budget_seconds=args.train_budget,
-        repo_root=str(repo_root),
-    )
 
-    runs_dir = repo_root / args.runs_dir
-    experiment_dir = runs_dir / f"experiment_{experiment_id}"
+    if args.config:
+        config = ExperimentConfig.from_yaml(Path(args.config), repo_root=str(repo_root))
+    else:
+        experiment_id = args.experiment_id or _make_experiment_id("single")
+        config = ExperimentConfig.make_single_long(
+            experiment_id=experiment_id,
+            time_budget_minutes=args.time_budget,
+            train_time_budget_seconds=args.train_budget,
+            repo_root=str(repo_root),
+        )
+
+    runs_dir = repo_root / (args.runs_dir if not args.config else "runs")
+    experiment_dir = runs_dir / f"experiment_{config.experiment_id}"
     experiment_dir.mkdir(parents=True, exist_ok=True)
 
-    system_prompt = _load_template("agent_system_prompt.md")
+    system_prompt = _load_template(repo_root / config.system_prompt_file)
     first_message_tmpl = _render_first_message(
-        _load_template("agent_first_message.md"), args.train_budget
+        _load_template(repo_root / config.first_message_file),
+        config.train_time_budget_seconds,
     )
 
-    print(f"[launcher] Starting single-long experiment: {experiment_id}")
+    print(f"[launcher] Starting single-long experiment: {config.experiment_id}")
     print(f"[launcher] Output directory: {experiment_dir}")
 
     run_single_long_experiment(

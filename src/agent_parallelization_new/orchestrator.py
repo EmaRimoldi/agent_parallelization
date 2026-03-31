@@ -29,7 +29,13 @@ from agent_parallelization_new.utils.workspace import create_workspace, destroy_
 
 
 class Orchestrator:
-    """Coordinates multi-agent experiments."""
+    """Coordinates multi-agent experiments.
+
+    Modes supported:
+      run_parallel()   — N independent agents in parallel (N from config.agents)
+      run_single()     — 1 agent with 2× budget
+      run_merge()      — post-hoc merge of a completed parallel run
+    """
 
     POLL_INTERVAL_SEC = 10
 
@@ -89,7 +95,7 @@ class Orchestrator:
         # Wait for all agents to finish or hit their hard deadlines
         self._wait_for_all(processes, hard_deadlines)
 
-        print("[orchestrator] All agents finished.")
+        print(f"[orchestrator] All {len(processes)} agents finished.")
 
     def run_single(
         self,
@@ -132,6 +138,39 @@ class Orchestrator:
         self._wait_for_all([proc], [hard_deadline])
         print("[orchestrator] Single agent finished.")
 
+    def run_merge(
+        self,
+        experiment_dir: Path,
+        source_mode: str = "parallel",
+        evaluate: bool = False,
+    ) -> None:
+        """Run the merge phase on a completed parallel experiment.
+
+        Parameters
+        ----------
+        experiment_dir : Path
+            The experiment root produced by a previous parallel run.
+        source_mode : str
+            Which mode directory to read agent results from (default "parallel").
+        evaluate : bool
+            If True, attempt to evaluate the merged train.py via SLURM.
+        """
+        from agent_parallelization_new.merger import MergeOrchestrator
+
+        print(f"[orchestrator] Starting merge phase for {experiment_dir.name}")
+        merger = MergeOrchestrator(
+            experiment_dir=experiment_dir,
+            autoresearch_dir=self.autoresearch_dir,
+            mode=source_mode,
+        )
+        results = merger.run(evaluate=evaluate)
+        print(
+            f"[orchestrator] Merge complete. "
+            f"best_individual={results.best_individual_val_bpb}, "
+            f"merge={results.merge_val_bpb}, "
+            f"merge_won={results.merge_won}"
+        )
+
     def _setup_agent(
         self, agent_config: AgentConfig, mode_dir: Path, run_id: str
     ) -> tuple[Path, Path]:
@@ -150,6 +189,9 @@ class Orchestrator:
             run_id=run_id,
             agent_id=agent_config.agent_id,
             results_root=results_root,
+            slurm_partition=self.config.slurm_partition,
+            slurm_gres=self.config.slurm_gres,
+            slurm_time=self.config.slurm_time,
         )
         (agent_dir / "logs").mkdir(parents=True, exist_ok=True)
         return agent_dir, workspace
