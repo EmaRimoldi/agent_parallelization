@@ -41,8 +41,36 @@ class ClaudeAgentRunner(AgentRunner):
     MIN_TURN_INTERVAL_SEC = 5
     INITIAL_BACKOFF_SEC = 5
     MAX_BACKOFF_SEC = 60
-    FIRST_TURN_TIMEOUT_SEC = 300  # 5 min for first turn (compilation etc.)
+    FIRST_TURN_TIMEOUT_SEC = 900  # 15 min: start_gpu_worker + SLURM queue + compile + first run
     MAX_TURN_TIMEOUT_SEC = 900    # 15 min per subsequent turn
+
+    @staticmethod
+    def _temperature_directive(temperature: Optional[float]) -> str:
+        """Return a system-prompt suffix that approximates the requested temperature.
+
+        The claude CLI exposes no --temperature flag.  We approximate the
+        effect via instructional wording:
+          temp ≥ 1.0  → exploratory / high-variance search style
+          temp < 0.5  → conservative / low-variance search style
+          otherwise   → no modification
+        """
+        if temperature is None:
+            return ""
+        if temperature >= 1.0:
+            return (
+                "\n\n[SEARCH STYLE: Be creative and exploratory. "
+                "Prefer bold, diverse changes over incremental refinement. "
+                "Try unconventional hyperparameter combinations that you would not "
+                "normally attempt. High variance in search is desirable.]"
+            )
+        if temperature < 0.5:
+            return (
+                "\n\n[SEARCH STYLE: Be conservative and methodical. "
+                "Make only small, well-motivated incremental changes. "
+                "Exploit the best-known region before exploring new directions. "
+                "Low variance and high reliability are desirable.]"
+            )
+        return ""
 
     def run(
         self,
@@ -53,10 +81,17 @@ class ClaudeAgentRunner(AgentRunner):
     ) -> None:
         """Run the agent loop until budget expires. Writes metadata.json at end."""
         config = self.config
+
+        # Inject temperature-approximate behaviour into system prompt
+        # (claude CLI has no --temperature flag; we use instructional wording)
+        effective_system_prompt = system_prompt + self._temperature_directive(
+            config.temperature
+        )
+
         budget = BudgetTracker(
             wall_clock_budget_seconds=config.time_budget_minutes * 60,
             train_time_budget_seconds=config.train_time_budget_seconds,
-            startup_deadline_seconds=600,
+            startup_deadline_seconds=config.time_budget_minutes * 60 + 300,  # full budget + 5 min buffer
         )
 
         # Unique session ID (never shared between agents)
@@ -90,7 +125,9 @@ class ClaudeAgentRunner(AgentRunner):
                 # Build turn message
                 if first_turn:
                     turn_msg = first_message
-                    turn_timeout = self.FIRST_TURN_TIMEOUT_SEC
+                    # First turn can include GPU queue wait + compile + first training run,
+                    # so give it the full remaining budget rather than a fixed cap.
+                    turn_timeout = max(self.FIRST_TURN_TIMEOUT_SEC, budget.remaining_seconds())
                 else:
                     mins_left = budget.remaining_minutes()
                     turn_msg = (
@@ -105,7 +142,7 @@ class ClaudeAgentRunner(AgentRunner):
                 exit_code, output = self._run_turn(
                     turn_msg=turn_msg,
                     session_id=session_id,
-                    system_prompt=system_prompt,
+                    system_prompt=effective_system_prompt,
                     timeout_seconds=turn_timeout,
                     env=env,
                 )
@@ -177,14 +214,15 @@ class ClaudeAgentRunner(AgentRunner):
             "claude",
             "--print",
             "--output-format", "text",
+            "--dangerously-skip-permissions",
         ]
 
-        # Pass system prompt if this is a new session (first turn or after rotation)
-        # Claude Code CLI supports --system-prompt flag
+        # Pass system prompt if provided — Claude Code CLI supports --system-prompt flag
         if system_prompt:
             cmd += ["--system-prompt", system_prompt]
 
-        cmd += ["--message", turn_msg]
+        # Prompt is a positional argument (not --message) in claude CLI ≥2.x
+        cmd += [turn_msg]
 
         try:
             result = subprocess.run(
