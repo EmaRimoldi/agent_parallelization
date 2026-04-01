@@ -120,6 +120,13 @@ class ClaudeAgentRunner(AgentRunner):
                 daemon=True,
             ).start()
 
+            # Background thread: logs workspace events (trigger, result, val_bpb)
+            threading.Thread(
+                target=self._watch_workspace_events,
+                args=(log_fh, _stop_watcher),
+                daemon=True,
+            ).start()
+
             while True:
                 # Hard wall-clock cap
                 if budget.startup_expired():
@@ -148,6 +155,11 @@ class ClaudeAgentRunner(AgentRunner):
                     remaining = budget.remaining_seconds()
                     turn_timeout = min(int(remaining), self.MAX_TURN_TIMEOUT_SEC)
 
+                log_fh.write(
+                    f"[{config.agent_id}] Turn {total_turns} starting "
+                    f"({'first turn' if first_turn else f'~{budget.remaining_minutes()} min remaining'}).\n"
+                )
+                log_fh.flush()
                 turn_start = time.monotonic()
                 exit_code, output = self._run_turn(
                     turn_msg=turn_msg,
@@ -232,6 +244,62 @@ class ClaudeAgentRunner(AgentRunner):
                 )
                 log_fh.flush()
                 return
+            stop_event.wait(2)
+
+    def _watch_workspace_events(
+        self,
+        log_fh,
+        stop_event: threading.Event,
+    ) -> None:
+        """Background thread: log key workspace file events as they happen."""
+        ws = self.workspace
+        agent_id = self.config.agent_id
+
+        trigger = ws / "run.trigger"
+        result = ws / "run.result"
+        train_out = ws / "logs" / "train_current.out"
+
+        trigger_seen = False
+        result_seen = False
+        run_count = 0
+
+        while not stop_event.is_set():
+            # Trigger appeared → training started
+            if not trigger_seen and trigger.exists():
+                trigger_seen = True
+                result_seen = False
+                run_count += 1
+                log_fh.write(f"[{agent_id}] Training run #{run_count} started (trigger dropped).\n")
+                log_fh.flush()
+
+            # Result appeared → training finished
+            if trigger_seen and not result_seen and result.exists():
+                result_seen = True
+                trigger_seen = False
+                # Read val_bpb from result or train_current.out
+                val_bpb = None
+                try:
+                    for src in (result, train_out):
+                        if src.exists():
+                            for line in src.read_text().splitlines():
+                                if line.startswith("val_bpb:"):
+                                    val_bpb = line.split(":", 1)[1].strip()
+                                    break
+                        if val_bpb:
+                            break
+                except OSError:
+                    pass
+                if val_bpb:
+                    log_fh.write(f"[{agent_id}] Training run #{run_count} done — val_bpb: {val_bpb}\n")
+                else:
+                    content = ""
+                    try:
+                        content = result.read_text().strip().splitlines()[0] if result.exists() else "no result"
+                    except OSError:
+                        pass
+                    log_fh.write(f"[{agent_id}] Training run #{run_count} done — {content}\n")
+                log_fh.flush()
+
             stop_event.wait(2)
 
     def _run_turn(
