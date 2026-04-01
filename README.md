@@ -147,6 +147,10 @@ src/agent_parallelization_new/
   utils/                 — git worktree management, log parsing
 ```
 
+## TODO
+
+- [ ] **Agent-driven merge phase** — the current merge (`run_merge_phase.py`) is deterministic: it parses scalar hyperparameters with regex and picks the best value found per parameter. This is brittle and misses interactions between parameters. Replace it with a Claude agent that reads all agent trajectories, reasoning traces, and snapshots, reasons about which changes were causal vs. incidental, and produces a merged `train.py` by judgement rather than by greedy per-parameter selection.
+
 ## Docs
 
 - [Parallel Capacity](docs/parallel_capacity.md)
