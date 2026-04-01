@@ -39,6 +39,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import numpy as np
 import pandas as pd
+from datetime import datetime, timezone
 
 
 # ---------------------------------------------------------------------------
@@ -132,6 +133,7 @@ def load_snapshots(agent_dir: Path) -> list[dict]:
         train_text = train_py_path.read_text(errors="replace")
         entries.append({
             "step_index": meta.get("step_index", -1),
+            "timestamp": meta.get("timestamp"),
             "git_message": meta.get("git_message", ""),
             "val_bpb_before": meta.get("val_bpb_before"),
             "val_bpb_after": meta.get("val_bpb_after"),
@@ -149,6 +151,45 @@ def load_baseline(agent_dir: Path) -> Optional[str]:
     if not baseline_path.exists():
         return None
     return baseline_path.read_text(errors="replace")
+
+
+def compute_elapsed_minutes(
+    snapshots: list[dict],
+    start_time_str: Optional[str],
+    total_budget_minutes: float,
+) -> list[Optional[float]]:
+    """
+    Return elapsed minutes from agent start for each snapshot (same order as snapshots).
+
+    Timestamps that fall outside [0, total_budget_minutes] are considered anomalous
+    (written out-of-order at finalization time) and returned as None so that callers
+    can skip them on time-based axes without distorting the scale.
+    """
+    if not start_time_str:
+        return [None] * len(snapshots)
+
+    try:
+        t0 = datetime.fromisoformat(start_time_str)
+    except ValueError:
+        return [None] * len(snapshots)
+
+    result = []
+    for snap in snapshots:
+        ts_str = snap.get("timestamp")
+        if not ts_str:
+            result.append(None)
+            continue
+        try:
+            ts = datetime.fromisoformat(ts_str)
+            elapsed = (ts - t0).total_seconds() / 60.0
+            # Treat as valid only if within the experiment time window
+            if 0.0 <= elapsed <= total_budget_minutes:
+                result.append(round(elapsed, 2))
+            else:
+                result.append(None)
+        except ValueError:
+            result.append(None)
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -204,17 +245,20 @@ def build_modification_table(
     """
     For each snapshot step, compute what changed relative to the *previous* snapshot
     (or to baseline for step 0). Returns a per-step DataFrame.
+    Snapshots may carry an 'elapsed_min' key (float or None) computed externally.
     """
     rows = []
     prev_text = baseline_text
 
     for snap in snapshots:
         curr_text = snap["train_py_text"]
+        elapsed_min = snap.get("elapsed_min")
+
         if prev_text is None:
-            # No baseline available — can't compute diff for step 0
             rows.append({
                 "agent_id": agent_id,
                 "step_index": snap["step_index"],
+                "elapsed_min": elapsed_min,
                 "git_message": snap["git_message"],
                 "val_bpb_after": snap["val_bpb_after"],
                 "accepted": snap["accepted"],
@@ -232,6 +276,7 @@ def build_modification_table(
         rows.append({
             "agent_id": agent_id,
             "step_index": snap["step_index"],
+            "elapsed_min": elapsed_min,
             "git_message": snap["git_message"],
             "val_bpb_after": snap["val_bpb_after"],
             "accepted": snap["accepted"],
@@ -465,6 +510,9 @@ def plot_param_impact_heatmap(
     ax_bar.set_xlabel("Mean Δval_bpb\n(all agents combined)", fontsize=9)
     ax_bar.set_title("Overall\nimpact", fontsize=9)
     ax_bar.grid(True, axis="x", alpha=0.3)
+    # Force bar chart y-axis to match heatmap row positions exactly
+    ax_bar.set_ylim(ax_heat.get_ylim())
+    ax_bar.invert_yaxis()   # match imshow: row 0 at top
 
     # Legend
     legend_handles = [
@@ -493,10 +541,14 @@ COLORS = plt.rcParams["axes.prop_cycle"].by_key()["color"]
 def plot_loss_curves(
     trajectories: dict[str, pd.DataFrame],
     output_path: Path,
+    agent_step_elapsed: Optional[dict[str, dict[int, float]]] = None,
 ) -> None:
     """
     Plot val_bpb vs training step for all agents.
     Produces a combined figure + a multi-panel figure.
+
+    agent_step_elapsed: {agent_id: {step_index: elapsed_min}} — when provided,
+    individual panels also show a secondary x-axis in elapsed minutes.
     """
     n = len(trajectories)
     if n == 0:
@@ -506,7 +558,7 @@ def plot_loss_curves(
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
     fig.suptitle("Training Loss (val_bpb) per Agent", fontsize=13, fontweight="bold")
 
-    # --- left panel: combined ---
+    # --- left panel: combined (step index x-axis, elapsed-min annotations) ---
     ax_combined = axes[0]
     ax_combined.set_title("Combined")
     ax_combined.set_xlabel("Training step")
@@ -523,12 +575,15 @@ def plot_loss_curves(
         best_idx = df["val_bpb"].idxmin()
         best_step = df.loc[best_idx, "step"]
         best_loss = df.loc[best_idx, "val_bpb"]
-        ax_combined.scatter(
-            [best_step], [best_loss],
-            color=color, s=120, zorder=5, marker="*",
-        )
+        ax_combined.scatter([best_step], [best_loss], color=color, s=120, zorder=5, marker="*")
+        # Annotate best with elapsed time if available
+        elapsed_label = ""
+        if agent_step_elapsed and agent_id in agent_step_elapsed:
+            et = agent_step_elapsed[agent_id].get(int(best_step))
+            if et is not None:
+                elapsed_label = f" @ {et:.0f} min"
         ax_combined.annotate(
-            f" {best_loss:.5f}",
+            f" {best_loss:.5f}{elapsed_label}",
             xy=(best_step, best_loss),
             fontsize=8, color=color, va="center",
         )
@@ -536,27 +591,25 @@ def plot_loss_curves(
     ax_combined.legend(fontsize=9)
     ax_combined.grid(True, alpha=0.3)
 
-    # --- right panel: multi-panel ---
-    ax_multi = axes[1]
-    ax_multi.axis("off")
+    # --- right panel: placeholder (replaced by fig2 below) ---
+    axes[1].axis("off")
 
-    # Build subplots grid
+    # Build subplots grid (individual panels)
     ncols = min(n, 2)
     nrows = (n + ncols - 1) // ncols
 
-    # Replace right panel with a proper subplot grid
     fig2, panel_axes = plt.subplots(
         nrows, ncols,
-        figsize=(6 * ncols, 4 * nrows),
+        figsize=(7 * ncols, 5 * nrows),
         squeeze=False,
     )
-    fig2.suptitle("Training Loss per Agent (individual panels)", fontsize=13, fontweight="bold")
+    fig2.suptitle("Training Loss per Agent — val_bpb vs elapsed time",
+                  fontsize=13, fontweight="bold")
 
     for idx, (agent_id, df) in enumerate(sorted(trajectories.items())):
         row, col = divmod(idx, ncols)
         ax = panel_axes[row][col]
         ax.set_title(agent_id, fontsize=10)
-        ax.set_xlabel("Training step")
         ax.set_ylabel("val_bpb")
 
         if df.empty:
@@ -564,14 +617,59 @@ def plot_loss_curves(
             continue
 
         color = COLORS[idx % len(COLORS)]
-        ax.plot(df["step"], df["val_bpb"], marker=".", linewidth=1.5, color=color, alpha=0.85)
 
-        best_idx = df["val_bpb"].idxmin()
-        best_step = df.loc[best_idx, "step"]
-        best_loss = df.loc[best_idx, "val_bpb"]
+        # Build elapsed-time array aligned to the trajectory steps
+        step_to_elapsed: dict[int, float] = {}
+        if agent_step_elapsed and agent_id in agent_step_elapsed:
+            step_to_elapsed = agent_step_elapsed[agent_id]
 
-        ax.scatter([best_step], [best_loss], color="red", s=150, zorder=5, marker="*", label=f"Best: {best_loss:.5f}")
-        ax.axhline(best_loss, color="red", linestyle="--", linewidth=0.8, alpha=0.6)
+        elapsed_vals = [step_to_elapsed.get(int(s)) for s in df["step"]]
+        has_elapsed = any(v is not None for v in elapsed_vals)
+
+        if has_elapsed:
+            # Use elapsed minutes as primary x-axis; add step-index tick labels
+            valid_mask = [v is not None for v in elapsed_vals]
+            x_vals = [elapsed_vals[i] if valid_mask[i] else np.nan for i in range(len(df))]
+            ax.plot(x_vals, df["val_bpb"].tolist(),
+                    marker=".", linewidth=1.5, color=color, alpha=0.85)
+            ax.set_xlabel("Elapsed time (min)")
+
+            # Add step-index secondary axis via twin — label major ticks
+            tick_x = [elapsed_vals[i] for i in range(len(df)) if elapsed_vals[i] is not None]
+            tick_labels = [str(int(df.iloc[i]["step"])) for i in range(len(df))
+                           if elapsed_vals[i] is not None]
+            ax2 = ax.twiny()
+            ax2.set_xlim(ax.get_xlim())
+            ax2.set_xticks(tick_x)
+            ax2.set_xticklabels(tick_labels, fontsize=6, rotation=45)
+            ax2.set_xlabel("Step index", fontsize=8)
+
+            best_idx = df["val_bpb"].idxmin()
+            best_elapsed = elapsed_vals[best_idx]
+            best_loss = df.loc[best_idx, "val_bpb"]
+            if best_elapsed is not None:
+                ax.scatter([best_elapsed], [best_loss], color="red", s=150, zorder=5,
+                           marker="*", label=f"Best: {best_loss:.5f} @ {best_elapsed:.0f} min")
+                ax.axhline(best_loss, color="red", linestyle="--", linewidth=0.8, alpha=0.6)
+            # Total duration annotation
+            valid_elapseds = [v for v in elapsed_vals if v is not None]
+            if len(valid_elapseds) >= 2:
+                total_dur = max(valid_elapseds) - min(valid_elapseds)
+                ax.text(0.02, 0.04,
+                        f"Span of timed steps: {total_dur:.0f} min  "
+                        f"({len(valid_elapseds)}/{len(df)} steps timed)",
+                        transform=ax.transAxes, fontsize=7.5, color="gray")
+        else:
+            # Fallback: step index on x-axis
+            ax.plot(df["step"], df["val_bpb"], marker=".", linewidth=1.5, color=color, alpha=0.85)
+            ax.set_xlabel("Training step")
+            best_idx = df["val_bpb"].idxmin()
+            best_step = df.loc[best_idx, "step"]
+            best_loss = df.loc[best_idx, "val_bpb"]
+            ax.scatter([best_step], [best_loss], color="red", s=150, zorder=5,
+                       marker="*", label=f"Best: {best_loss:.5f}")
+            ax.axhline(best_loss, color="red", linestyle="--", linewidth=0.8, alpha=0.6)
+
         ax.legend(fontsize=8)
         ax.grid(True, alpha=0.3)
 
@@ -580,10 +678,8 @@ def plot_loss_curves(
         row, col = divmod(idx, ncols)
         panel_axes[row][col].axis("off")
 
-    # Fix layout and remove empty right panel from fig
     axes[1].remove()
     fig.tight_layout()
-    # Save combined figure
     combined_path = output_path.parent / "loss_curves_combined.png"
     fig.savefig(combined_path, dpi=150, bbox_inches="tight")
     plt.close(fig)
@@ -632,7 +728,173 @@ def build_loss_summary(
 
 
 # ---------------------------------------------------------------------------
-# 8. Modification visualizations
+# 8. Per-step timing visualization
+# ---------------------------------------------------------------------------
+
+def plot_timing_summary(
+    all_mod_tables: dict[str, pd.DataFrame],
+    agent_metadata: dict[str, dict],
+    output_path: Path,
+) -> None:
+    """
+    Three-panel figure summarising how time was spent:
+      Left:   stacked bar chart — training time vs agent overhead per step (per agent).
+      Middle: cumulative loss improvement over elapsed time.
+      Right:  total experiment time budget and fraction used per agent.
+
+    Uses the 'elapsed_min' column in mod_tables, plus start_time/end_time from metadata.
+    Steps whose timestamps are anomalous (elapsed_min=None) are excluded from time plots.
+
+    Training time per step is read from config (train_time_budget_seconds → minutes).
+    Overhead = gap between consecutive steps minus training time.
+    """
+    n_agents = len(all_mod_tables)
+    if n_agents == 0:
+        return
+
+    TRAIN_MIN = 5.0   # 300 s = 5 min per training run (from experiment config)
+
+    fig, axes = plt.subplots(1, 3, figsize=(16, 5))
+    fig.suptitle("Time analysis per agent", fontsize=13, fontweight="bold")
+
+    ax_step, ax_cumul, ax_budget = axes
+
+    # ---- Panel 1: per-step duration breakdown ----
+    ax_step.set_title("Time per training run\n(train vs agent overhead)", fontsize=10)
+    ax_step.set_xlabel("Elapsed time (min)")
+    ax_step.set_ylabel("Duration (min)")
+
+    has_any_timing = False
+    for a_idx, (agent_id, df) in enumerate(sorted(all_mod_tables.items())):
+        if "elapsed_min" not in df.columns:
+            continue
+        timed = df.dropna(subset=["elapsed_min"]).sort_values("elapsed_min")
+        if len(timed) < 2:
+            continue
+        has_any_timing = True
+
+        elapseds = timed["elapsed_min"].tolist()
+        # Inter-step gaps = total time for this run (training + overhead)
+        gaps = [elapseds[i + 1] - elapseds[i] for i in range(len(elapseds) - 1)]
+        # Bar positions = midpoint of each interval
+        bar_x = [(elapseds[i] + elapseds[i + 1]) / 2 for i in range(len(gaps))]
+
+        color_agent = COLORS[a_idx % len(COLORS)]
+        accepted_flags = timed["accepted"].tolist()[:-1]  # one flag per gap
+
+        for i, (x, gap) in enumerate(zip(bar_x, gaps)):
+            train_t = min(TRAIN_MIN, gap)
+            overhead_t = max(0.0, gap - train_t)
+            edge = "#2ca02c" if accepted_flags[i] is True else (
+                "#d62728" if accepted_flags[i] is False else "#7f7f7f"
+            )
+            # Training portion
+            ax_step.bar(x, train_t, width=gap * 0.7, color=color_agent,
+                        alpha=0.7, edgecolor=edge, linewidth=1.2,
+                        label=f"{agent_id} (train)" if i == 0 else "_")
+            # Overhead portion stacked on top
+            if overhead_t > 0.1:
+                ax_step.bar(x, overhead_t, bottom=train_t, width=gap * 0.7,
+                            color=color_agent, alpha=0.3, edgecolor=edge, linewidth=0.8,
+                            label=f"{agent_id} (overhead)" if i == 0 else "_",
+                            hatch="//")
+
+    if has_any_timing:
+        ax_step.legend(fontsize=7, loc="upper right")
+    else:
+        ax_step.text(0.5, 0.5, "No timing data", ha="center", va="center",
+                     transform=ax_step.transAxes)
+    ax_step.grid(True, axis="y", alpha=0.3)
+
+    # ---- Panel 2: cumulative loss improvement over time ----
+    ax_cumul.set_title("Cumulative best val_bpb over time", fontsize=10)
+    ax_cumul.set_xlabel("Elapsed time (min)")
+    ax_cumul.set_ylabel("Best val_bpb so far")
+
+    for a_idx, (agent_id, df) in enumerate(sorted(all_mod_tables.items())):
+        if "elapsed_min" not in df.columns:
+            continue
+        timed = df.dropna(subset=["elapsed_min", "val_bpb_after"]).sort_values("elapsed_min")
+        if timed.empty:
+            continue
+        color_agent = COLORS[a_idx % len(COLORS)]
+        elapsed = timed["elapsed_min"].tolist()
+        bpb = timed["val_bpb_after"].tolist()
+        # Running minimum (best seen so far)
+        running_best = []
+        cur_best = float("inf")
+        for v in bpb:
+            cur_best = min(cur_best, v)
+            running_best.append(cur_best)
+        ax_cumul.step(elapsed, running_best, where="post",
+                      color=color_agent, linewidth=2, label=agent_id)
+        ax_cumul.scatter(elapsed, running_best, color=color_agent, s=30, zorder=3)
+
+    ax_cumul.legend(fontsize=9)
+    ax_cumul.grid(True, alpha=0.3)
+
+    # ---- Panel 3: time budget usage per agent ----
+    ax_budget.set_title("Time budget usage per agent", fontsize=10)
+    ax_budget.set_ylabel("Minutes")
+
+    agent_ids = sorted(all_mod_tables.keys())
+    x_pos = np.arange(len(agent_ids))
+    bar_w = 0.35
+
+    total_budgets = []
+    elapsed_totals = []
+    timed_step_counts = []
+
+    for agent_id in agent_ids:
+        meta = agent_metadata.get(agent_id, {})
+        # Total budget from metadata
+        budget = 120.0   # default
+        start_str = meta.get("start_time")
+        end_str = meta.get("end_time")
+        if start_str and end_str:
+            try:
+                t0 = datetime.fromisoformat(start_str)
+                t1 = datetime.fromisoformat(end_str)
+                budget = (t1 - t0).total_seconds() / 60.0
+            except ValueError:
+                pass
+        total_budgets.append(budget)
+
+        df = all_mod_tables[agent_id]
+        if "elapsed_min" in df.columns:
+            timed = df.dropna(subset=["elapsed_min"])
+            timed_step_counts.append(len(timed))
+            elapsed_totals.append(timed["elapsed_min"].max() if not timed.empty else 0.0)
+        else:
+            timed_step_counts.append(0)
+            elapsed_totals.append(0.0)
+
+    for i, agent_id in enumerate(agent_ids):
+        color_agent = COLORS[i % len(COLORS)]
+        ax_budget.bar(x_pos[i] - bar_w / 2, total_budgets[i],
+                      width=bar_w, color=color_agent, alpha=0.35,
+                      label=f"{agent_id} budget", edgecolor="gray")
+        ax_budget.bar(x_pos[i] + bar_w / 2, elapsed_totals[i],
+                      width=bar_w, color=color_agent, alpha=0.85,
+                      label=f"{agent_id} used ({timed_step_counts[i]} timed steps)")
+        ax_budget.text(x_pos[i] + bar_w / 2, elapsed_totals[i] + 1,
+                       f"{elapsed_totals[i]:.0f} min\n({timed_step_counts[i]} steps)",
+                       ha="center", fontsize=7.5)
+
+    ax_budget.set_xticks(x_pos)
+    ax_budget.set_xticklabels(agent_ids, fontsize=9)
+    ax_budget.legend(fontsize=7, loc="upper right")
+    ax_budget.grid(True, axis="y", alpha=0.3)
+    ax_budget.set_ylim(0, max(total_budgets) * 1.15)
+
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    print(f"  Saved: {output_path}")
+
+
+# ---------------------------------------------------------------------------
+# 10. Modification visualizations
 # ---------------------------------------------------------------------------
 
 def plot_modification_summary(
@@ -736,58 +998,83 @@ def plot_modification_trajectory(
 ) -> None:
     """
     Plot accepted/rejected trajectory with val_bpb overlay per agent.
-    X-axis = step index, Y-axis = val_bpb_after (when available).
-    Green markers = accepted, red = rejected.
+    X-axis = elapsed minutes (when available) or step index as fallback.
+    Y-axis = val_bpb_after.  Green markers = accepted, red = rejected.
     """
     n_agents = len(all_mod_tables)
     if n_agents == 0:
         return
 
-    fig, axes = plt.subplots(1, n_agents, figsize=(7 * n_agents, 5), squeeze=False)
+    fig, axes = plt.subplots(1, n_agents, figsize=(8 * n_agents, 5), squeeze=False)
     fig.suptitle("Modification trajectory (accepted / rejected) per agent",
                  fontsize=13, fontweight="bold")
 
     for idx, (agent_id, df) in enumerate(sorted(all_mod_tables.items())):
         ax = axes[0][idx]
         ax.set_title(agent_id, fontsize=10)
-        ax.set_xlabel("Step index")
         ax.set_ylabel("val_bpb_after")
 
         if df.empty:
             ax.text(0.5, 0.5, "No data", ha="center", va="center", transform=ax.transAxes)
             continue
 
-        valid = df.dropna(subset=["val_bpb_after"])
+        valid = df.dropna(subset=["val_bpb_after"]).copy()
         if valid.empty:
             ax.text(0.5, 0.5, "No val_bpb data", ha="center", va="center",
                     transform=ax.transAxes)
             continue
 
-        ax.plot(valid["step_index"], valid["val_bpb_after"],
+        # Choose x-axis: elapsed_min when available for the majority of rows
+        use_elapsed = (
+            "elapsed_min" in valid.columns
+            and valid["elapsed_min"].notna().mean() > 0.5
+        )
+        if use_elapsed:
+            x_col = "elapsed_min"
+            ax.set_xlabel("Elapsed time (min)")
+        else:
+            x_col = "step_index"
+            ax.set_xlabel("Step index")
+
+        # Connection line
+        valid_timed = valid.dropna(subset=[x_col])
+        ax.plot(valid_timed[x_col], valid_timed["val_bpb_after"],
                 color="steelblue", linewidth=1.2, alpha=0.6, zorder=1)
 
-        accepted = valid[valid["accepted"] == True]   # noqa: E712
-        rejected = valid[valid["accepted"] == False]   # noqa: E712
+        accepted = valid_timed[valid_timed["accepted"] == True]   # noqa: E712
+        rejected = valid_timed[valid_timed["accepted"] == False]  # noqa: E712
 
         if not accepted.empty:
-            ax.scatter(accepted["step_index"], accepted["val_bpb_after"],
+            ax.scatter(accepted[x_col], accepted["val_bpb_after"],
                        color="#2ca02c", s=80, zorder=3, label="accepted", marker="o")
         if not rejected.empty:
-            ax.scatter(rejected["step_index"], rejected["val_bpb_after"],
+            ax.scatter(rejected[x_col], rejected["val_bpb_after"],
                        color="#d62728", s=80, zorder=3, label="rejected", marker="x")
 
-        # Annotate git messages briefly (first word or param name)
-        for _, row in valid.iterrows():
+        # Annotate with first word of git message
+        for _, row in valid_timed.iterrows():
             short = row["git_message"].split()[0] if row["git_message"] else ""
-            ax.annotate(short, xy=(row["step_index"], row["val_bpb_after"]),
+            ax.annotate(short, xy=(row[x_col], row["val_bpb_after"]),
                         fontsize=6, rotation=45, alpha=0.7)
 
-        best_idx = valid["val_bpb_after"].idxmin()
-        best_step = valid.loc[best_idx, "step_index"]
-        best_bpb = valid.loc[best_idx, "val_bpb_after"]
-        ax.scatter([best_step], [best_bpb], color="gold", s=200, zorder=5,
-                   marker="*", label=f"Best {best_bpb:.5f}")
+        best_i = valid_timed["val_bpb_after"].idxmin()
+        best_x = valid_timed.loc[best_i, x_col]
+        best_bpb = valid_timed.loc[best_i, "val_bpb_after"]
+        best_label = (f"Best {best_bpb:.5f} @ {best_x:.0f} min"
+                      if use_elapsed else f"Best {best_bpb:.5f}")
+        ax.scatter([best_x], [best_bpb], color="gold", s=200, zorder=5,
+                   marker="*", label=best_label)
         ax.axhline(best_bpb, color="gold", linestyle="--", linewidth=0.8, alpha=0.7)
+
+        # Per-step duration annotation (between consecutive timed steps)
+        if use_elapsed and len(valid_timed) >= 2:
+            xs = valid_timed[x_col].tolist()
+            durations = [xs[i + 1] - xs[i] for i in range(len(xs) - 1)]
+            avg_dur = sum(durations) / len(durations)
+            ax.text(0.02, 0.04,
+                    f"Avg time/run: {avg_dur:.1f} min  "
+                    f"(total: {xs[-1] - xs[0]:.0f} min over {len(xs)} runs)",
+                    transform=ax.transAxes, fontsize=7.5, color="gray")
 
         ax.legend(fontsize=8)
         ax.grid(True, alpha=0.3)
@@ -877,12 +1164,24 @@ def analyze_experiment(experiment_dir: Path, output_dir: Path) -> None:
         return
     print(f"  Found {len(agents)} agents: {[a.name for a in agents]}")
 
+    # Read experiment config for time budget
+    cfg_path = experiment_dir / "config.json"
+    budget_minutes = 120.0
+    if cfg_path.exists():
+        try:
+            cfg = json.loads(cfg_path.read_text())
+            budget_minutes = float(cfg.get("base_time_budget_minutes", 120.0))
+        except (json.JSONDecodeError, ValueError):
+            pass
+
     # --- collect data ---
     trajectories: dict[str, pd.DataFrame] = {}
     agent_metadata: dict[str, dict] = {}
     all_mod_tables: dict[str, pd.DataFrame] = {}
     all_param_freq: dict[str, pd.DataFrame] = {}
     all_impact_tables: dict[str, pd.DataFrame] = {}
+    # step_index → elapsed_min mapping per agent (for loss curve secondary axis)
+    agent_step_elapsed: dict[str, dict[int, float]] = {}
 
     for agent_dir in agents:
         agent_id = agent_dir.name
@@ -890,6 +1189,20 @@ def analyze_experiment(experiment_dir: Path, output_dir: Path) -> None:
         meta = load_agent_metadata(agent_dir)
         snapshots = load_snapshots(agent_dir)
         baseline = load_baseline(agent_dir)
+
+        # Compute elapsed times and attach to each snapshot dict in-place
+        elapsed_list = compute_elapsed_minutes(
+            snapshots, meta.get("start_time"), budget_minutes
+        )
+        for snap, et in zip(snapshots, elapsed_list):
+            snap["elapsed_min"] = et
+
+        # Build step→elapsed lookup (valid entries only)
+        agent_step_elapsed[agent_id] = {
+            snap["step_index"]: snap["elapsed_min"]
+            for snap in snapshots
+            if snap["elapsed_min"] is not None
+        }
 
         trajectories[agent_id] = traj
         agent_metadata[agent_id] = meta
@@ -901,8 +1214,9 @@ def analyze_experiment(experiment_dir: Path, output_dir: Path) -> None:
         all_param_freq[agent_id] = param_freq
         all_impact_tables[agent_id] = impact_table
 
+        n_timed = sum(1 for et in elapsed_list if et is not None)
         print(f"  {agent_id}: {len(traj)} trajectory steps, "
-              f"{len(snapshots)} snapshots, "
+              f"{len(snapshots)} snapshots ({n_timed} with valid timestamps), "
               f"{len(param_freq)} params touched")
 
     # --- plots ---
@@ -910,6 +1224,7 @@ def analyze_experiment(experiment_dir: Path, output_dir: Path) -> None:
     plot_loss_curves(
         trajectories,
         output_dir / "loss_curves.png",
+        agent_step_elapsed=agent_step_elapsed,
     )
     plot_modification_summary(
         all_mod_tables,
@@ -923,6 +1238,11 @@ def analyze_experiment(experiment_dir: Path, output_dir: Path) -> None:
     plot_param_impact_heatmap(
         all_impact_tables,
         output_dir / "param_impact_heatmap.png",
+    )
+    plot_timing_summary(
+        all_mod_tables,
+        agent_metadata,
+        output_dir / "timing_summary.png",
     )
 
     # --- CSV outputs ---
