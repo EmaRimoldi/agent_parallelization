@@ -1,12 +1,12 @@
-# Agent Parallelization New
+# Agent Parallelization
 
-Parallel agent experiment framework using Claude Code sub-agents.
+Parallel agent experiment framework using Claude Code sub-agents to search hyperparameters faster through independent exploration.
 
-## Overview
+## How it works
 
-Runs N independent Claude Code sub-agents in parallel to explore hyperparameter
-optimisation of a NanoGPT training task. Each agent operates in an isolated git
-worktree with its own workspace, budget, GPU allocation, and output directory.
+![Workflow overview](docs/workflow_overview.svg)
+
+N independent Claude Code sub-agents run in parallel, each with its own isolated git worktree, GPU allocation, time budget, and output directory. Agents never communicate during the run — they explore the hyperparameter space independently and their best results are merged at the end.
 
 ## Modes
 
@@ -59,8 +59,6 @@ src/agent_parallelization_new/
 
 ## Docs
 
-- [Architecture](docs/architecture.md)
-- [Experiment Protocol](docs/experiment_protocol.md)
 - [Parallel Capacity](docs/parallel_capacity.md)
 - [Merge Protocol](docs/merge_protocol.md)
-- [Original Repo Reverse Engineering](docs/original_repo_reverse_engineering.md)
+- [Workflow Diagram](docs/workflow_diagram.md)
