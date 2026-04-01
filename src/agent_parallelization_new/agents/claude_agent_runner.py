@@ -101,6 +101,7 @@ class ClaudeAgentRunner(AgentRunner):
             log_fh.flush()
 
             _stop_watcher = threading.Event()
+            _observed_val_bpbs: list[float] = []
 
             # GPU allocation watcher — starts budget clock
             threading.Thread(
@@ -112,7 +113,7 @@ class ClaudeAgentRunner(AgentRunner):
             # Workspace event watcher — training trigger/result/file changes
             threading.Thread(
                 target=self._watch_workspace_events,
-                args=(log_fh, _stop_watcher),
+                args=(log_fh, _stop_watcher, _observed_val_bpbs),
                 daemon=True,
             ).start()
 
@@ -215,6 +216,7 @@ class ClaudeAgentRunner(AgentRunner):
             end_time=end_time,
             total_turns=total_turns,
             budget_seconds=config.time_budget_minutes * 60,
+            observed_val_bpbs=_observed_val_bpbs,
         )
 
     # ------------------------------------------------------------------
@@ -245,6 +247,7 @@ class ClaudeAgentRunner(AgentRunner):
         self,
         log_fh,
         stop_event: threading.Event,
+        observed_val_bpbs: list,
     ) -> None:
         """Log key workspace file events: trigger, result, train.py edits, results.tsv rows."""
         ws = self.workspace
@@ -312,6 +315,10 @@ class ClaudeAgentRunner(AgentRunner):
                 except OSError:
                     pass
                 if val_bpb:
+                    try:
+                        observed_val_bpbs.append(float(val_bpb))
+                    except ValueError:
+                        pass
                     log_fh.write(f"[{agent_id}] Training run #{run_count} done — val_bpb: {val_bpb}\n")
                 else:
                     status = ""
@@ -430,6 +437,7 @@ class ClaudeAgentRunner(AgentRunner):
         end_time: str,
         total_turns: int,
         budget_seconds: int,
+        observed_val_bpbs: list | None = None,
     ) -> None:
         metadata = {
             "agent_id": self.config.agent_id,
@@ -444,13 +452,31 @@ class ClaudeAgentRunner(AgentRunner):
         meta_path = self.results_dir / "metadata.json"
         meta_path.write_text(json.dumps(metadata, indent=2))
 
+        # Build trajectory.jsonl — primary source: observed val_bpb values captured
+        # by the workspace watcher. Fallback: workspace/results/results.tsv.
         traj_path = self.results_dir / "trajectory.jsonl"
+        traj_bpbs: list[float] = list(observed_val_bpbs) if observed_val_bpbs else []
+        if not traj_bpbs:
+            results_tsv = self.workspace / "results" / "results.tsv"
+            if results_tsv.exists():
+                for row in results_tsv.read_text().splitlines():
+                    if not row.strip() or row.startswith("commit"):
+                        continue
+                    parts = row.split("\t")
+                    if len(parts) >= 2:
+                        try:
+                            traj_bpbs.append(float(parts[1]))
+                        except ValueError:
+                            pass
+        if traj_bpbs:
+            traj_lines = [json.dumps({"step": i, "val_bpb": v}) for i, v in enumerate(traj_bpbs)]
+            traj_path.write_text("\n".join(traj_lines) + "\n")
+
         if traj_path.exists():
             lines = [l for l in traj_path.read_text().splitlines() if l.strip()]
             metadata["total_training_runs"] = len(lines)
             if lines:
-                import json as _json
-                bpbs = [_json.loads(l).get("val_bpb") for l in lines if l.strip()]
+                bpbs = [json.loads(l).get("val_bpb") for l in lines if l.strip()]
                 bpbs = [b for b in bpbs if b is not None]
                 if bpbs:
                     metadata["best_val_bpb"] = min(bpbs)
