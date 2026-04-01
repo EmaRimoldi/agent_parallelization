@@ -133,6 +133,7 @@ def load_snapshots(agent_dir: Path) -> list[dict]:
         entries.append({
             "step_index": meta.get("step_index", -1),
             "git_message": meta.get("git_message", ""),
+            "val_bpb_before": meta.get("val_bpb_before"),
             "val_bpb_after": meta.get("val_bpb_after"),
             "accepted": meta.get("accepted"),
             "hypothesis": meta.get("hypothesis", ""),
@@ -268,8 +269,222 @@ def build_param_frequency_table(
     )
 
 
+def build_param_impact_table(
+    agent_id: str,
+    snapshots: list[dict],
+    baseline_text: Optional[str],
+) -> pd.DataFrame:
+    """
+    For each snapshot step where both val_bpb_before and val_bpb_after are
+    available, identify which parameters changed and record the signed loss
+    delta (val_bpb_after - val_bpb_before). Lower val_bpb is better, so a
+    negative delta means improvement.
+
+    Returns one row per (agent, step, parameter) with columns:
+        agent_id, step_index, param, delta_bpb, accepted
+    """
+    rows = []
+    prev_text = baseline_text
+
+    for snap in snapshots:
+        curr_text = snap["train_py_text"]
+        bpb_before = snap.get("val_bpb_before")  # stored directly in snapshot metadata
+        bpb_after = snap.get("val_bpb_after")
+
+        # Skip steps where we can't compute a meaningful delta
+        # (bpb_before=0.0 is a sentinel used in agent_1/step_000)
+        if (
+            prev_text is not None
+            and bpb_before is not None
+            and bpb_before != 0.0
+            and bpb_after is not None
+        ):
+            delta = bpb_after - bpb_before
+            param_diffs = diff_params(prev_text, curr_text)
+            for param in param_diffs:
+                rows.append({
+                    "agent_id": agent_id,
+                    "step_index": snap["step_index"],
+                    "param": param,
+                    "delta_bpb": delta,
+                    "accepted": snap.get("accepted"),
+                })
+
+        prev_text = curr_text
+
+    return pd.DataFrame(rows) if rows else pd.DataFrame(
+        columns=["agent_id", "step_index", "param", "delta_bpb", "accepted"]
+    )
+
+
 # ---------------------------------------------------------------------------
-# 5. Loss-over-step visualization
+# 5. Parameter impact heatmap
+# ---------------------------------------------------------------------------
+
+def plot_param_impact_heatmap(
+    all_impact_tables: dict[str, pd.DataFrame],
+    output_path: Path,
+) -> None:
+    """
+    Heatmap: parameters × agents, color = mean signed delta_bpb.
+
+    - Blue  (negative delta) = parameter change was associated with improvement.
+    - Red   (positive delta) = parameter change was associated with worsening.
+    - White = no data for that (agent, parameter) pair.
+    - Parameters touched only by one agent are labelled with ★.
+    - Cell annotations show: mean delta (top) and change count (bottom).
+
+    A companion bar chart (right panel) shows the mean delta averaged across
+    all agents, giving a quick ranking of which parameters actually help.
+    """
+    if not all_impact_tables or all(df.empty for df in all_impact_tables.values()):
+        print("  [warn] No impact data to plot.")
+        return
+
+    combined = pd.concat(list(all_impact_tables.values()), ignore_index=True)
+    if combined.empty:
+        print("  [warn] No impact data to plot.")
+        return
+
+    agents = sorted(combined["agent_id"].unique())
+    params = sorted(combined["param"].unique())
+
+    # Build pivot: mean delta per (param, agent)
+    pivot_mean = combined.pivot_table(
+        index="param", columns="agent_id", values="delta_bpb",
+        aggfunc="mean",
+    ).reindex(index=params, columns=agents)
+
+    # Build pivot: count per (param, agent) — for annotations
+    pivot_count = combined.pivot_table(
+        index="param", columns="agent_id", values="delta_bpb",
+        aggfunc="count",
+    ).reindex(index=params, columns=agents).fillna(0).astype(int)
+
+    # Identify parameters touched by only one agent
+    agent_sets: dict[str, set] = {
+        agent: set(combined[combined["agent_id"] == agent]["param"].unique())
+        for agent in agents
+    }
+    all_params_set = set(params)
+    exclusive: dict[str, set] = {}
+    for agent in agents:
+        others = all_params_set - agent_sets[agent]
+        # exclusive to this agent = touched by this agent but not by any other
+        exclusive[agent] = agent_sets[agent] - set.union(
+            *(agent_sets[a] for a in agents if a != agent), set()
+        )
+    exclusive_params = set.union(*exclusive.values()) if exclusive else set()
+
+    # Sort parameters by mean delta (averaged across agents, most improvement first)
+    row_means = pivot_mean.mean(axis=1, skipna=True)
+    sorted_params = row_means.sort_values().index.tolist()  # most improvement (most negative) on top
+    pivot_mean = pivot_mean.reindex(sorted_params)
+    pivot_count = pivot_count.reindex(sorted_params)
+
+    # Compute symmetric color scale
+    vmax = pivot_mean.abs().max().max()
+    if np.isnan(vmax) or vmax == 0:
+        vmax = 0.01
+    vmin = -vmax
+
+    fig, (ax_heat, ax_bar) = plt.subplots(
+        1, 2,
+        figsize=(5 + 2 * len(agents), max(5, 0.55 * len(sorted_params) + 2)),
+        gridspec_kw={"width_ratios": [len(agents) * 2, 2]},
+    )
+    fig.suptitle(
+        "Parameter Impact on val_bpb\n"
+        "(mean signed Δval_bpb per change; blue = improvement, red = worsening)",
+        fontsize=12, fontweight="bold",
+    )
+
+    # --- heatmap ---
+    import matplotlib.colors as mcolors
+    cmap = plt.get_cmap("RdBu")  # blue=negative (improvement), red=positive (worsening)
+    mat = pivot_mean.values.astype(float)
+
+    im = ax_heat.imshow(
+        mat, cmap=cmap, vmin=vmin, vmax=vmax, aspect="auto",
+    )
+
+    # Axes labels
+    ax_heat.set_xticks(range(len(agents)))
+    ax_heat.set_xticklabels(agents, fontsize=10)
+    ax_heat.set_yticks(range(len(sorted_params)))
+
+    # Y-axis tick labels: add ★ for exclusive params
+    ylabels = []
+    for p in sorted_params:
+        if p in exclusive_params:
+            owners = [a for a in agents if p in exclusive.get(a, set())]
+            ylabels.append(f"{p}  ★({owners[0]})" if owners else f"{p}  ★")
+        else:
+            ylabels.append(p)
+    ax_heat.set_yticklabels(ylabels, fontsize=9)
+
+    # Cell annotations: mean delta + count
+    for i, param in enumerate(sorted_params):
+        for j, agent in enumerate(agents):
+            mean_val = pivot_mean.loc[param, agent] if agent in pivot_mean.columns else np.nan
+            cnt = pivot_count.loc[param, agent] if agent in pivot_count.columns else 0
+            if np.isnan(mean_val):
+                ax_heat.text(j, i, "—", ha="center", va="center", fontsize=9, color="#aaaaaa")
+            else:
+                sign = "−" if mean_val < 0 else "+"
+                mag = abs(mean_val)
+                text_color = "white" if abs(mean_val) > vmax * 0.55 else "black"
+                ax_heat.text(
+                    j, i,
+                    f"{sign}{mag:.4f}\n(n={cnt})",
+                    ha="center", va="center", fontsize=7.5, color=text_color,
+                    linespacing=1.4,
+                )
+
+    # Grid lines between cells
+    ax_heat.set_xticks(np.arange(-0.5, len(agents)), minor=True)
+    ax_heat.set_yticks(np.arange(-0.5, len(sorted_params)), minor=True)
+    ax_heat.grid(which="minor", color="white", linewidth=1.5)
+    ax_heat.tick_params(which="minor", bottom=False, left=False)
+
+    plt.colorbar(im, ax=ax_heat, label="mean Δval_bpb", shrink=0.7)
+
+    # --- companion bar chart: overall mean delta per parameter ---
+    overall_mean = pivot_mean.mean(axis=1, skipna=True).reindex(sorted_params)
+    colors_bar = ["#2166ac" if v < 0 else "#d73027" for v in overall_mean]
+    # Mark exclusive params
+    edge_colors = ["black" if p in exclusive_params else "none" for p in sorted_params]
+
+    ax_bar.barh(
+        range(len(sorted_params)), overall_mean.values,
+        color=colors_bar, edgecolor=edge_colors, linewidth=1.2,
+    )
+    ax_bar.axvline(0, color="black", linewidth=0.8)
+    ax_bar.set_yticks(range(len(sorted_params)))
+    ax_bar.set_yticklabels([])   # shared y-axis with heatmap — labels already on left
+    ax_bar.set_xlabel("Mean Δval_bpb\n(all agents combined)", fontsize=9)
+    ax_bar.set_title("Overall\nimpact", fontsize=9)
+    ax_bar.grid(True, axis="x", alpha=0.3)
+
+    # Legend
+    legend_handles = [
+        mpatches.Patch(color="#2166ac", label="improvement (Δ < 0)"),
+        mpatches.Patch(color="#d73027", label="worsening  (Δ > 0)"),
+        mpatches.Patch(facecolor="white", edgecolor="black", linewidth=1.2,
+                       label="★ exclusive to one agent"),
+    ]
+    ax_heat.legend(handles=legend_handles, fontsize=8,
+                   loc="lower right", bbox_to_anchor=(1.0, -0.02),
+                   framealpha=0.9)
+
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    print(f"  Saved: {output_path}")
+
+
+# ---------------------------------------------------------------------------
+# 7. Loss-over-step visualization
 # ---------------------------------------------------------------------------
 
 COLORS = plt.rcParams["axes.prop_cycle"].by_key()["color"]
@@ -417,7 +632,7 @@ def build_loss_summary(
 
 
 # ---------------------------------------------------------------------------
-# 7. Modification visualizations
+# 8. Modification visualizations
 # ---------------------------------------------------------------------------
 
 def plot_modification_summary(
@@ -584,7 +799,7 @@ def plot_modification_trajectory(
 
 
 # ---------------------------------------------------------------------------
-# 8. Report generation
+# 9. Report generation
 # ---------------------------------------------------------------------------
 
 def write_markdown_report(
@@ -646,7 +861,7 @@ def write_markdown_report(
 
 
 # ---------------------------------------------------------------------------
-# 9. Main orchestration
+# 10. Main orchestration
 # ---------------------------------------------------------------------------
 
 def analyze_experiment(experiment_dir: Path, output_dir: Path) -> None:
@@ -667,6 +882,7 @@ def analyze_experiment(experiment_dir: Path, output_dir: Path) -> None:
     agent_metadata: dict[str, dict] = {}
     all_mod_tables: dict[str, pd.DataFrame] = {}
     all_param_freq: dict[str, pd.DataFrame] = {}
+    all_impact_tables: dict[str, pd.DataFrame] = {}
 
     for agent_dir in agents:
         agent_id = agent_dir.name
@@ -680,8 +896,10 @@ def analyze_experiment(experiment_dir: Path, output_dir: Path) -> None:
 
         mod_table = build_modification_table(agent_id, snapshots, baseline)
         param_freq = build_param_frequency_table(agent_id, snapshots, baseline)
+        impact_table = build_param_impact_table(agent_id, snapshots, baseline)
         all_mod_tables[agent_id] = mod_table
         all_param_freq[agent_id] = param_freq
+        all_impact_tables[agent_id] = impact_table
 
         print(f"  {agent_id}: {len(traj)} trajectory steps, "
               f"{len(snapshots)} snapshots, "
@@ -702,6 +920,10 @@ def analyze_experiment(experiment_dir: Path, output_dir: Path) -> None:
         all_mod_tables,
         output_dir / "modification_trajectory.png",
     )
+    plot_param_impact_heatmap(
+        all_impact_tables,
+        output_dir / "param_impact_heatmap.png",
+    )
 
     # --- CSV outputs ---
     print("  Writing CSV summaries …")
@@ -716,6 +938,10 @@ def analyze_experiment(experiment_dir: Path, output_dir: Path) -> None:
     combined_freq = pd.concat(list(all_param_freq.values()), ignore_index=True)
     combined_freq.to_csv(output_dir / "param_change_frequency.csv", index=False)
     print(f"  Saved: {output_dir / 'param_change_frequency.csv'}")
+
+    combined_impact = pd.concat(list(all_impact_tables.values()), ignore_index=True)
+    combined_impact.to_csv(output_dir / "param_impact_by_agent.csv", index=False)
+    print(f"  Saved: {output_dir / 'param_impact_by_agent.csv'}")
 
     # --- Markdown report ---
     print("  Writing markdown report …")
