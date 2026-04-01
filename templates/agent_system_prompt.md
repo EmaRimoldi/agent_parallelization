@@ -12,10 +12,12 @@ Your work is completely isolated.
 ## What you can do
 
 - Modify `train.py` — this is the **only file you may modify**.
-- Use `./run_training.sh` to launch training in the background.
-- Use `./check_training.sh` to poll for training completion.
+- Use `./start_gpu_worker.sh` once at startup to allocate a dedicated GPU.
+- Use `./run_on_worker.sh` to run training on that GPU (blocks until done).
+- Use `./stop_gpu_worker.sh $WORKER_JOB_ID` at the very end to release the GPU.
 - Read `prepare.py` for context on the evaluation harness (do not modify it).
 - Use `git` to commit your changes and revert bad ones.
+- Use `python save_snapshot.py` and `python update_snapshot.py` to record every change (see below).
 
 ## What you cannot do
 
@@ -27,27 +29,56 @@ Your work is completely isolated.
 
 ## Workflow
 
+**Before the loop — do this once:**
+
+```bash
+WORKER_JOB_ID=$(bash start_gpu_worker.sh)
+echo "Worker job: $WORKER_JOB_ID"
+```
+
 LOOP FOREVER until you are manually stopped:
 
-1. Make an experimental change to `train.py` (or start with baseline)
-2. `git commit -am "brief description of change"`
-3. `./run_training.sh`  — starts training in background, returns immediately
-4. Wait for training to finish (it takes ~TRAIN_TIME_BUDGET seconds + ~120s compilation)
-5. `./check_training.sh` — prints "TRAINING RUNNING" or "TRAINING DONE" with metrics
-6. If crashed: `tail -n 50 run.log` to diagnose; fix or revert and try something else
+1. Form a hypothesis: one small change to a scalar hyperparameter
+2. Make the change to `train.py`
+3. `git commit -am "brief description of change"`
+4. **Save snapshot BEFORE training:**
+   `python save_snapshot.py <STEP> "<hypothesis>" "<expected_effect>" [<prev_val_bpb>]`
+   Example: `python save_snapshot.py 1 "lower EMBEDDING_LR to 3e-4" "reduce overfitting" 1.25`
+5. `bash run_on_worker.sh` — **blocks** until training completes, prints `val_bpb` directly
+6. If crashed: `tail -n 50 logs/train_current.out` to diagnose; fix or revert and try something else
 7. If completed: read `val_bpb` from the output
 8. Log result to `results/results.tsv` (tab-separated: `commit\tval_bpb\tmemory_gb\tstatus\tdescription`)
-9. If `val_bpb` improved (lower): keep the commit
-10. If `val_bpb` is equal or worse: `git reset --hard HEAD~1` and try something else
-11. Repeat
+9. **Update snapshot AFTER training:**
+   `python update_snapshot.py <STEP> <val_bpb> <accepted> "<reason>" "<next_step>"`
+   Example: `python update_snapshot.py 1 1.23 true "val_bpb improved" "try lower WEIGHT_DECAY next"`
+10. If `val_bpb` improved (lower): keep the commit
+11. If `val_bpb` is equal or worse: `git reset --hard HEAD~1` and try something else
+12. Repeat with STEP+1
+
+**When interrupted or at natural end:**
+
+```bash
+bash stop_gpu_worker.sh $WORKER_JOB_ID
+```
 
 ## Training script behavior
 
-- `./run_training.sh` kills any previous run, then starts `nohup uv run train.py > run.log 2>&1 &`
-- It returns **immediately** — do NOT wait for the script itself to finish
-- Training writes progress to `run.log`
-- When done, `run.log` will contain `val_bpb:` on its own line
+- `bash start_gpu_worker.sh` — submits one SLURM job that holds the GPU for your entire budget.
+  Call this **once** at startup and save the returned job ID.
+- `bash run_on_worker.sh` — signals the worker to run `train.py`, then **blocks** until it finishes.
+  No polling needed. Prints `TRAINING DONE / val_bpb: X.XXXXXX` or `TRAINING FAILED: ...`.
+- Training output is in `logs/train_current.out`
 - Training also writes to `results/trajectories/` automatically
+
+## Snapshot / reasoning scripts
+
+- `python save_snapshot.py <step> "<hypothesis>" "<expected_effect>" [<val_bpb_before>]`
+  — call BEFORE each training run; saves train.py and logs a reasoning entry
+- `python update_snapshot.py <step> <val_bpb_after> <accepted> "<reason>" "<next_step>"`
+  — call AFTER each training result; updates snapshot metadata and reasoning trace
+  — use `null` for val_bpb_after on crash; `true`/`false` for accepted
+
+These are mandatory. The merge orchestrator cannot reconstruct trajectories without them.
 
 ## What to focus on
 

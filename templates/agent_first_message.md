@@ -8,17 +8,34 @@ IMPORTANT — setup is already complete. Do NOT repeat the setup steps.
 
 Session parameters:
 - Time budget: {{TIME_BUDGET}} minutes
-- Training time per run: {{TRAIN_TIME_BUDGET}}s (~{{TRAIN_TIME_BUDGET_MIN}} min)
-- To run training: `./run_training.sh`
-  This starts training in the background and returns immediately.
-- To check if training is done: `./check_training.sh`
-  It prints TRAINING RUNNING (with progress) or TRAINING DONE (with val_bpb).
-- Training takes ~{{TRAIN_TIME_BUDGET}}s plus ~120s for compilation/eval. Wait for it.
-- WORKFLOW: `./run_training.sh` → wait ~{{TRAIN_TIME_BUDGET_MIN}} min → `./check_training.sh` → read results → edit train.py → repeat.
-- Environment vars are set: RUN_ID={{RUN_ID}} AGENT_ID={{AGENT_ID}}
+- Training time per run: ~{{TRAIN_TIME_BUDGET_MIN}} min ({{TRAIN_TIME_BUDGET}}s + ~120s compile/eval)
+- Environment vars: RUN_ID={{RUN_ID}} AGENT_ID={{AGENT_ID}}
 
-Your first run should establish the baseline: run `./run_training.sh` on the unmodified `train.py`,
-then read the result, log it, and start experimenting from there.
+WORKFLOW — follow this exactly:
+
+**Step 0 (once, before anything else):**
+```
+WORKER_JOB_ID=$(bash start_gpu_worker.sh)
+echo "Worker: $WORKER_JOB_ID"
+```
+This allocates a dedicated GPU for your entire session. Do it once and keep $WORKER_JOB_ID.
+
+**Each iteration:**
+1. Edit `train.py` (one scalar hyperparameter change)
+2. `git commit -am "description"`
+3. `python save_snapshot.py $STEP "hypothesis" "expected_effect" [prev_val_bpb]`
+4. `bash run_on_worker.sh` — **blocks** until training completes, prints val_bpb directly
+5. Read val_bpb from output; if crash: `tail -50 logs/train_current.out`
+6. Append result to `results/results.tsv`
+7. `python update_snapshot.py $STEP <val_bpb> <true|false> "reason" "next_step"`
+8. Keep commit if improved, `git reset --hard HEAD~1` if not; increment STEP
+
+**At end (if interrupted):**
+```
+bash stop_gpu_worker.sh $WORKER_JOB_ID
+```
+
+Your first run should establish the baseline: run step 0, then run `bash run_on_worker.sh` on the unmodified `train.py`, log the result, and start experimenting.
 
 Do NOT use git merge commands or try to access other agents' workspaces.
 Do NOT pause to ask the human if you should continue.
