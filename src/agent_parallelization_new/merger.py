@@ -41,6 +41,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 from agent_parallelization_new.snapshotting import SnapshotManager, SnapshotMetadata
 from agent_parallelization_new.reasoning_trace import (
     ReasoningEntry,
@@ -53,47 +57,50 @@ from agent_parallelization_new.reasoning_trace import (
 # Hyperparameter pattern matching
 # ---------------------------------------------------------------------------
 
-# Matches lines like:  EMBEDDING_LR = 1e-3   or   weight_decay: float = 0.1
+# Matches ALL UPPERCASE param assignments with any value type
+# e.g. EMBEDDING_LR = 1e-3, ADAM_BETAS = (0.8, 0.95), WINDOW_PATTERN = "local"
+_HYPERPARAM_RE_FULL = re.compile(
+    r'^(?P<name>[A-Z][A-Z0-9_]+)\s*=\s*(?P<value>[^\s#\n][^#\n]*?)(?:\s*#.*)?$',
+    re.MULTILINE,
+)
+
+# Keep the old numeric-only regex for backward-compat with produce_merged_candidate
 _HYPERPARAM_RE = re.compile(
     r'^(?P<indent>\s*)(?P<name>[A-Z_][A-Z0-9_]*)(?P<sep>\s*=\s*)(?P<value>[0-9eE+\-\.]+)\s*(?:#.*)?$',
     re.MULTILINE,
 )
 
-# Parameters known to be tuned by the agents (from system prompt)
-TUNABLE_PARAMS = {
-    "EMBEDDING_LR", "UNEMBEDDING_LR", "MATRIX_LR",
-    "WEIGHT_DECAY", "WARMDOWN_RATIO",
-    "LR", "LEARNING_RATE", "BATCH_SIZE", "SEQ_LEN",
-}
+# Auto-detect TUNABLE_PARAMS from any UPPERCASE line — filled lazily per file.
+# Kept as a set for backward compatibility with produce_merged_candidate internals.
+TUNABLE_PARAMS: set[str] = set()
 
 
-def extract_hyperparams(train_py: str) -> dict[str, float]:
-    """Extract scalar hyperparameter values from train.py source."""
-    params: dict[str, float] = {}
-    for m in _HYPERPARAM_RE.finditer(train_py):
-        name = m.group("name")
-        if name in TUNABLE_PARAMS:
-            try:
-                params[name] = float(m.group("value"))
-            except ValueError:
-                pass
+def _detect_tunable_params(train_py: str) -> set[str]:
+    """Return the set of all UPPERCASE param names found in train_py."""
+    return {m.group("name") for m in _HYPERPARAM_RE_FULL.finditer(train_py)}
+
+
+def extract_hyperparams(train_py: str) -> dict[str, str]:
+    """Extract all UPPERCASE hyperparameter values from train.py source.
+
+    Returns string values so that tuples, strings, and numerics are preserved.
+    """
+    params: dict[str, str] = {}
+    for m in _HYPERPARAM_RE_FULL.finditer(train_py):
+        params[m.group("name")] = m.group("value").strip()
     return params
 
 
-def apply_hyperparams(train_py: str, params: dict[str, float]) -> str:
-    """Replace hyperparameter values in train.py source."""
+def apply_hyperparams(train_py: str, params: dict[str, str]) -> str:
+    """Replace hyperparameter values in train.py source (string-based)."""
     result = train_py
     for name, value in params.items():
-        pattern = re.compile(
-            r'^(\s*)(' + re.escape(name) + r')(\s*=\s*)([0-9eE+\-\.]+)(\s*(?:#.*)?)$',
-            re.MULTILINE,
+        result = re.sub(
+            r'^(' + re.escape(name) + r'\s*=\s*)[^\s#\n][^#\n]*?(\s*(?:#.*)?)$',
+            r'\g<1>' + str(value) + r'\g<2>',
+            result,
+            flags=re.MULTILINE,
         )
-        # Format value preserving scientific notation style when appropriate
-        if abs(value) < 1e-2 or abs(value) >= 1e4:
-            formatted = f"{value:g}"
-        else:
-            formatted = str(value)
-        result = pattern.sub(r'\g<1>\g<2>\g<3>' + formatted + r'\g<5>', result)
     return result
 
 
@@ -180,6 +187,17 @@ class MergeOrchestrator:
         self.merge_dir = self.experiment_dir / "mode_merge"
         self.merge_dir.mkdir(parents=True, exist_ok=True)
         (self.merge_dir / "candidates").mkdir(exist_ok=True)
+
+        # Read slurm_time from experiment config.json if available
+        cfg_path = self.experiment_dir / "config.json"
+        if cfg_path.exists():
+            try:
+                cfg = json.loads(cfg_path.read_text())
+                self.slurm_time: str = cfg.get("slurm_time", "00:10:00")
+            except Exception:
+                self.slurm_time = "00:10:00"
+        else:
+            self.slurm_time = "00:10:00"
 
     # ------------------------------------------------------------------
     # Step 1: Gather evidence
@@ -302,36 +320,62 @@ class MergeOrchestrator:
     def analyse_trajectories(
         self, evidence: dict, candidates: list[MergeCandidate]
     ) -> dict:
-        """Identify which modifications correlate with metric improvements."""
+        """Identify which modifications correlate with metric improvements.
+
+        Diffs consecutive snapshot train.py files to attribute improvements
+        only to the parameters that actually changed in each step.
+        """
         analysis: dict = {
             "per_param_improvements": {},
             "cross_agent_patterns": [],
             "conflicting_directions": [],
         }
 
-        # Collect param → val_bpb_improvement mapping across all candidates
-        # "improvement" = val_bpb_before - val_bpb_after (positive = better)
+        # param → list of (improvement, changed_value, agent_id)
         per_param: dict[str, list[float]] = {}
 
         for agent_id, agent_data in evidence["agents"].items():
             agent_dir = Path(agent_data["agent_dir"])
             snap_mgr = SnapshotManager(agent_dir / "snapshots")
             snaps = snap_mgr.list_snapshots()
+            # Sort by step index for consecutive diffing
+            snaps_sorted = sorted(snaps, key=lambda s: s.step_index)
 
-            for snap in snaps:
-                if snap.val_bpb_before is None or snap.val_bpb_after is None:
-                    continue
-                improvement = snap.val_bpb_before - snap.val_bpb_after
-                if not snap.accepted:
-                    improvement = -abs(improvement)  # mark rejections as negative
+            prev_params: Optional[dict[str, str]] = None
 
+            for snap in snaps_sorted:
                 snap_dir = snap_mgr.get_snapshot_dir(snap.step_index)
-                if snap_dir and (snap_dir / "train.py").exists():
-                    params = extract_hyperparams((snap_dir / "train.py").read_text())
-                    for param, value in params.items():
-                        if param not in per_param:
-                            per_param[param] = []
-                        per_param[param].append(improvement)
+                if snap_dir is None or not (snap_dir / "train.py").exists():
+                    prev_params = None
+                    continue
+
+                curr_params = extract_hyperparams((snap_dir / "train.py").read_text())
+
+                if prev_params is not None:
+                    # Find params that changed between previous and current snapshot
+                    changed_params = {
+                        name
+                        for name, val in curr_params.items()
+                        if prev_params.get(name) != val
+                    }
+                    # Also include new params not in prev
+                    changed_params |= set(curr_params.keys()) - set(prev_params.keys())
+
+                    if (
+                        changed_params
+                        and snap.val_bpb_before is not None
+                        and snap.val_bpb_after is not None
+                    ):
+                        improvement = snap.val_bpb_before - snap.val_bpb_after
+                        if not snap.accepted:
+                            improvement = -abs(improvement)
+
+                        for param in changed_params:
+                            if param not in per_param:
+                                per_param[param] = []
+                            per_param[param].append(improvement)
+
+                prev_params = curr_params
 
         for param, improvements in per_param.items():
             if improvements:
@@ -401,9 +445,12 @@ class MergeOrchestrator:
         contributing_steps = list(best_cand.source_steps)
         transplants: list[str] = []
 
+        # Detect tunable params dynamically from the best candidate's source
+        dynamic_tunable = _detect_tunable_params(merged_src)
+
         # For each tunable parameter, see if any other candidate has a better value
         per_param_improvements = analysis.get("per_param_improvements", {})
-        for param in TUNABLE_PARAMS:
+        for param in dynamic_tunable:
             if param not in merged_params:
                 continue
             best_param_value = merged_params[param]
@@ -413,7 +460,7 @@ class MergeOrchestrator:
                 if param not in cand.hyperparams:
                     continue
                 cand_value = cand.hyperparams[param]
-                if abs(cand_value - best_param_value) < 1e-10:
+                if str(cand_value).strip() == str(best_param_value).strip():
                     continue  # same value, skip
                 # Only transplant if this candidate has better or comparable val_bpb
                 # AND the parameter is generally associated with improvements
@@ -460,16 +507,18 @@ class MergeOrchestrator:
         workspace: Path,
         slurm_partition: str = "pi_tpoggio",
         slurm_gres: str = "gpu:1",
-        slurm_time: str = "00:08:00",
+        slurm_time: Optional[str] = None,
         timeout_seconds: int = 900,
     ) -> Optional[float]:
         """Copy candidate to workspace, run training, return val_bpb.
 
         Returns None if evaluation fails or times out.
         """
+        effective_slurm_time = slurm_time if slurm_time is not None else self.slurm_time
         train_py = workspace / "train.py"
         try:
             shutil.copy2(candidate.train_py_path, train_py)
+            logger.debug("[merger] evaluate_candidate using slurm_time=%s", effective_slurm_time)
             submit_sh = workspace / "submit_training.sh"
             if not submit_sh.exists():
                 print(f"[merger] No submit_training.sh in {workspace}, skipping evaluation.")
@@ -531,6 +580,8 @@ class MergeOrchestrator:
         baseline_train_py: Optional[Path] = None,
         evaluate: bool = False,
         evaluation_workspace: Optional[Path] = None,
+        agent_based: bool = True,
+        agent_model: str = "claude-opus-4-6",
     ) -> MergeResults:
         """Execute the full merge pipeline.
 
@@ -542,6 +593,11 @@ class MergeOrchestrator:
             If True, actually run training to evaluate the merged candidate.
         evaluation_workspace : Path, optional
             Pre-configured workspace with submit/check scripts for evaluation.
+        agent_based : bool
+            If True (default), use a Claude agent to produce the merged candidate.
+            If False, use the deterministic parameter-level merge.
+        agent_model : str
+            Claude model to use when agent_based=True.
         """
         print("[merger] Step 1: Gathering evidence...")
         evidence = self.gather_evidence()
@@ -577,7 +633,21 @@ class MergeOrchestrator:
             baseline_train_py = self.autoresearch_dir / "train.py"
 
         print("[merger] Step 4: Producing merged candidate...")
-        merged = self.produce_merged_candidate(candidates, analysis, baseline_train_py)
+        if agent_based:
+            from agent_parallelization_new.agent_merger import (
+                produce_merged_candidate_via_agent,
+            )
+            print(f"[merger] Using agent-based merge (model={agent_model}).")
+            merged = produce_merged_candidate_via_agent(
+                candidates=candidates,
+                evidence=evidence,
+                baseline_train_py_path=baseline_train_py,
+                merge_dir=self.merge_dir,
+                model=agent_model,
+                slurm_time=self.slurm_time,
+            )
+        else:
+            merged = self.produce_merged_candidate(candidates, analysis, baseline_train_py)
         candidates.append(merged)
         print(f"[merger] Merge strategy: {merged.strategy}")
 

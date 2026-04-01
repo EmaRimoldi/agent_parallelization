@@ -45,6 +45,18 @@ def main(argv=None) -> None:
         "--evaluate", action="store_true",
         help="Attempt to evaluate the merged candidate via SLURM after producing it.",
     )
+    parser.add_argument(
+        "--evaluation-workspace", default=None,
+        help="Path to a workspace dir with submit_training.sh and check_training.sh for evaluation.",
+    )
+    parser.add_argument(
+        "--deterministic", action="store_true",
+        help="Use the deterministic parameter-level merge instead of the Claude agent merge.",
+    )
+    parser.add_argument(
+        "--agent-model", default="claude-opus-4-6",
+        help="Claude model to use for agent-based merge (default: claude-opus-4-6).",
+    )
     args = parser.parse_args(argv)
 
     repo_root = Path(__file__).parents[1]
@@ -60,17 +72,31 @@ def main(argv=None) -> None:
         else repo_root / "autoresearch"
     )
 
+    agent_based = not args.deterministic
     print(f"[merge] Experiment:      {experiment_dir}")
     print(f"[merge] Source mode:     {args.source_mode}")
     print(f"[merge] Autoresearch:    {autoresearch_dir}")
     print(f"[merge] Run evaluation:  {args.evaluate}")
+    print(f"[merge] Merge mode:      {'deterministic' if args.deterministic else 'agent-based'}")
+    if agent_based:
+        print(f"[merge] Agent model:     {args.agent_model}")
 
     merger = MergeOrchestrator(
         experiment_dir=experiment_dir,
         autoresearch_dir=autoresearch_dir,
         mode=args.source_mode,
     )
-    results = merger.run(evaluate=args.evaluate)
+    evaluation_workspace = (
+        Path(args.evaluation_workspace).expanduser().resolve()
+        if args.evaluation_workspace
+        else None
+    )
+    results = merger.run(
+        evaluate=args.evaluate,
+        evaluation_workspace=evaluation_workspace,
+        agent_based=agent_based,
+        agent_model=args.agent_model,
+    )
 
     print("\n=== Merge Results ===")
     print(f"  Best individual agent:  {results.best_individual_agent}")

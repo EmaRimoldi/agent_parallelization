@@ -163,7 +163,7 @@ class Orchestrator:
             autoresearch_dir=self.autoresearch_dir,
             mode=source_mode,
         )
-        results = merger.run(evaluate=evaluate)
+        results = merger.run(evaluate=evaluate, agent_based=True)
         print(
             f"[orchestrator] Merge complete. "
             f"best_individual={results.best_individual_val_bpb}, "
