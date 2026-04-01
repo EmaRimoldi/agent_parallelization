@@ -84,6 +84,26 @@ The workspace is a git worktree (~source files only, no git history duplication)
 
 The `claude` CLI (`--print --output-format text`) exposes only final assistant text, not internal thinking. To expose reasoning, replace the subprocess `claude --print` call in `agents/claude_agent_runner.py:_invoke_claude_turn` with a direct Anthropic SDK call using `thinking={"type": "enabled", "budget_tokens": N}`.
 
+### Q: Can I close the terminal while agents are running?
+
+**No — not safely without extra steps.** The SLURM worker jobs run independently on compute nodes and survive terminal closure. However, the Python launcher process (`run_parallel_experiment.py`) and its child agent threads run on the login node as a regular process group. Closing the terminal sends SIGHUP to the process group, killing the launcher and all agent threads.
+
+To safely detach: run `disown <PID>` in the terminal before closing. The launcher becomes an orphan process and continues running; agent threads survive with it.
+
+If you accidentally close the terminal, the SLURM worker jobs keep running but nobody is reading their results — the experiment is effectively lost for that session (results can still be collected manually afterwards with `run_merge_phase.py`).
+
+### Q: Is the merge phase automatic after the experiment finishes?
+
+**No** — it must be run manually after the parallel experiment completes:
+
+```bash
+uv run python scripts/run_merge_phase.py \
+  --experiment-dir runs/<experiment_id> \
+  --evaluate
+```
+
+The `--evaluate` flag submits the merged `train.py` to SLURM for a final validation run. Without it, the merge candidate is produced but not scored.
+
 ## Modes
 
 | Mode | Command | Description |
