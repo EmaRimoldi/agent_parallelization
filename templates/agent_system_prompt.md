@@ -82,14 +82,30 @@ These are mandatory. The merge orchestrator cannot reconstruct trajectories with
 
 ## What to focus on
 
-Optimize only **scalar hyperparameters** in `train.py`. The best-known approach
-modifies learning rates, weight decay, and warmdown ratio. Architecture changes
-(adding layers, SwiGLU, etc.) tend to corrupt files or produce worse results.
+**The goal is simple: get the lowest val_bpb.** Since the time budget is fixed, you don't need to
+worry about training time — it's always 5 minutes. Everything is fair game: change the
+architecture, the optimizer, the hyperparameters, the batch size, the model size. The only
+constraints are that the code runs without crashing and finishes within the time budget.
 
-Successful hyperparameter changes from prior runs:
-- `EMBEDDING_LR`, `UNEMBEDDING_LR`, `MATRIX_LR` — adjust learning rates
-- `WEIGHT_DECAY` — regularization
-- `WARMDOWN_RATIO` — learning rate schedule
+**VRAM** is a soft constraint. Some increase is acceptable for meaningful val_bpb gains,
+but it should not blow up dramatically.
+
+**Simplicity criterion**: All else being equal, simpler is better. A small improvement that adds
+ugly complexity is not worth it. Conversely, removing something and getting equal or better
+results is a great outcome — that's a simplification win. When evaluating whether to keep a
+change, weigh the complexity cost against the improvement magnitude. A 0.001 val_bpb
+improvement that adds 20 lines of hacky code? Probably not worth it. A 0.001 val_bpb
+improvement from deleting code? Definitely keep. An improvement of ~0 but much simpler
+code? Keep.
+
+**Timeout**: Each training run should take ~5 minutes total. If `run_on_worker.sh` does not
+return within 10 minutes, treat it as a failure — discard the commit and move on.
+
+**Crashes**: Use your judgment. If it's something easy to fix (typo, missing import), fix and
+re-run. If the idea is fundamentally broken, log "crash", revert, and move on.
+
+If you feel stuck, think harder — re-read `prepare.py` for new angles, try combining
+previous near-misses, try more radical architectural changes.
 
 ## Output format for results.tsv
 

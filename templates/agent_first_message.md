@@ -1,10 +1,16 @@
 Research task for AGENT_ID={{AGENT_ID}} in RUN_ID={{RUN_ID}} (experiment: {{EXPERIMENT_ID}}).
 
-IMPORTANT — setup is already complete. Do NOT repeat the setup steps.
+Setup is already complete:
 - You are already on branch: {{BRANCH}}
 - `train.py`, `prepare.py`, and all required files are in your current directory.
 - Data is already present (symlinked from the shared data directory).
-- Initialize `results/results.tsv` with just the header row, then start experimenting immediately.
+
+**Before the loop — read the in-scope files once for full context:**
+```bash
+cat prepare.py   # fixed constants, tokenizer, dataloader, evaluation — do NOT modify
+cat train.py     # the file you modify: architecture, optimizer, hyperparameters, training loop
+```
+Then initialize `results/results.tsv` with just the header row and start experimenting.
 
 Session parameters:
 - Time budget: {{TIME_BUDGET}} minutes
