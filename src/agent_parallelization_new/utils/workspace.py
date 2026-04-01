@@ -9,7 +9,13 @@ from typing import Optional
 
 from agent_parallelization_new.compatibility.training_harness import (
     generate_check_training_sh,
+    generate_run_on_worker_sh,
     generate_run_training_sh,
+    generate_slurm_check_training_sh,
+    generate_snapshot_helpers,
+    generate_start_gpu_worker_sh,
+    generate_stop_gpu_worker_sh,
+    generate_submit_training_sh,
 )
 
 
@@ -25,6 +31,12 @@ def create_workspace(
     run_id: str,
     agent_id: str,
     results_root: Path,
+    slurm_partition: str = "pi_tpoggio",
+    slurm_gres: str = "gpu:1",
+    slurm_time: str = "00:08:00",
+    use_slurm: bool = True,
+    persistent_worker: bool = True,
+    agent_time_budget_minutes: int = 60,
 ) -> Path:
     """Create an isolated git worktree for one agent.
 
@@ -33,30 +45,63 @@ def create_workspace(
     2. Create git worktree at workspace_path
     3. Copy train.py.baseline
     4. Symlink .venv and data/
-    5. Generate run_training.sh and check_training.sh
-    6. Create results subdirectory structure
+    5. Generate training scripts (SLURM: submit_training.sh + check_training.sh;
+       local: run_training.sh + check_training.sh)
+    6. Create results directory
 
     Returns workspace_path.
     """
     autoresearch_dir = autoresearch_dir.resolve()
     workspace_path = workspace_path.resolve()
+    results_root = results_root.resolve()
 
     _ensure_branch(autoresearch_dir, branch_name)
     _create_worktree(autoresearch_dir, workspace_path, branch_name)
     _save_baseline(workspace_path)
     _symlink_shared(autoresearch_dir, workspace_path)
+    _override_program_md(workspace_path)
 
-    # Generate training wrapper scripts
-    generate_run_training_sh(workspace_path, train_budget_seconds)
-    generate_check_training_sh(workspace_path)
+    if use_slurm:
+        if persistent_worker:
+            # Convert agent budget to HH:MM:SS, adding 10-minute safety margin
+            total_minutes = agent_time_budget_minutes + 10
+            worker_time = f"{total_minutes // 60:02d}:{total_minutes % 60:02d}:00"
+            generate_start_gpu_worker_sh(
+                workspace_path,
+                agent_id=agent_id,
+                results_root=results_root,
+                slurm_partition=slurm_partition,
+                slurm_gres=slurm_gres,
+                worker_time=worker_time,
+            )
+            generate_run_on_worker_sh(workspace_path, train_budget_seconds)
+            generate_stop_gpu_worker_sh(workspace_path)
+        else:
+            # Legacy: one sbatch per train.py run
+            generate_submit_training_sh(
+                workspace_path,
+                agent_id=agent_id,
+                results_root=results_root,
+                slurm_partition=slurm_partition,
+                slurm_gres=slurm_gres,
+                slurm_time=slurm_time,
+            )
+            generate_slurm_check_training_sh(workspace_path)
+    else:
+        generate_run_training_sh(workspace_path, train_budget_seconds)
+        generate_check_training_sh(workspace_path)
 
-    # Set up per-agent results directory
-    agent_results = results_root / "trajectories" / run_id
-    agent_results.mkdir(parents=True, exist_ok=True)
-    snap_dir = results_root / "snapshots" / run_id / agent_id
-    snap_dir.mkdir(parents=True, exist_ok=True)
-    weights_dir = results_root / "weights" / run_id / agent_id
-    weights_dir.mkdir(parents=True, exist_ok=True)
+    # Generate snapshot helper scripts (save_snapshot.py, update_snapshot.py)
+    generate_snapshot_helpers(
+        workspace=workspace_path,
+        agent_id=agent_id,
+        results_root=results_root,
+    )
+
+    # Set up per-agent output directories
+    results_root.mkdir(parents=True, exist_ok=True)
+    (results_root.parent / "snapshots").mkdir(parents=True, exist_ok=True)
+    (results_root.parent / "reasoning").mkdir(parents=True, exist_ok=True)
 
     return workspace_path
 
@@ -109,6 +154,29 @@ def _create_worktree(
         raise WorkspaceError(
             f"Failed to create worktree at {workspace_path}: {result.stderr}"
         )
+
+
+def _override_program_md(workspace_path: Path) -> None:
+    """Replace program.md with a stub that redirects to our launcher instructions.
+
+    The original program.md instructs agents to run `uv run train.py` directly,
+    which bypasses SLURM entirely. We overwrite it so agents follow the
+    first_message instructions instead.
+    """
+    stub = """\
+# DO NOT FOLLOW THESE INSTRUCTIONS
+
+This workspace is managed by the parallel agent autoresearch framework.
+Your instructions are in the first message of this session.
+
+Follow those instructions exactly. In particular:
+- DO NOT run `uv run train.py` directly.
+- DO use `bash start_gpu_worker.sh` (once) and `bash run_on_worker.sh` (per iteration).
+- DO NOT read or follow the original program.md workflow.
+"""
+    program_md = workspace_path / "program.md"
+    if program_md.exists():
+        program_md.write_text(stub)
 
 
 def _save_baseline(workspace_path: Path) -> None:

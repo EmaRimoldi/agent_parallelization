@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Optional
 
 from agent_parallelization_new.outputs.schema import AgentResult, ExperimentSummary, TrajectoryEntry
+from agent_parallelization_new.snapshotting import SnapshotManager
+from agent_parallelization_new.reasoning_trace import ReasoningTracer
 
 
 def collect_agent_result(
@@ -65,6 +67,18 @@ def collect_agent_result(
     return result
 
 
+def collect_agent_snapshots(agent_dir: Path) -> list[dict]:
+    """Return all snapshot metadata dicts for one agent."""
+    snap_mgr = SnapshotManager(agent_dir / "snapshots")
+    return [s.to_dict() for s in snap_mgr.list_snapshots()]
+
+
+def collect_agent_reasoning(agent_dir: Path, agent_id: str) -> list[dict]:
+    """Return all reasoning trace entries for one agent."""
+    tracer = ReasoningTracer(agent_dir / "reasoning", agent_id)
+    return [e.to_dict() for e in tracer.read_all()]
+
+
 def collect_experiment(
     experiment_dir: Path,
     experiment_id: str,
@@ -94,7 +108,87 @@ def collect_experiment(
     comparison_path = agg_dir / "comparison_table.csv"
     _write_comparison_csv(comparison_path, summary)
 
+    # Collect snapshots and reasoning traces for all agents
+    collected_candidates: dict = {"agents": {}}
+    for agent_id in agent_ids:
+        agent_dir = mode_dir / agent_id
+        snapshots = collect_agent_snapshots(agent_dir)
+        reasoning = collect_agent_reasoning(agent_dir, agent_id)
+        collected_candidates["agents"][agent_id] = {
+            "snapshots": snapshots,
+            "reasoning_trace": reasoning,
+            "snapshot_count": len(snapshots),
+            "reasoning_steps": len(reasoning),
+        }
+    (agg_dir / "collected_candidates.json").write_text(
+        json.dumps(collected_candidates, indent=2)
+    )
+
     return summary
+
+
+def collect_results(mode_dir: str | Path) -> dict:
+    """Collect all agent results from a mode directory.
+
+    Scans <mode_dir>/agent_*/results/ for trajectory.jsonl and metadata.json.
+    Returns a plain dict suitable for JSON serialisation.
+
+    Example:
+        collect_results('runs/smoke_test/mode_parallel')
+    """
+    mode_path = Path(mode_dir).expanduser().resolve()
+    agents = {}
+    for agent_dir in sorted(mode_path.glob("agent_*")):
+        if not agent_dir.is_dir():
+            continue
+        agent_id = agent_dir.name
+        results_dir = agent_dir / "results"
+
+        entry: dict = {
+            "agent_id": agent_id,
+            "results_path": str(results_dir),
+            "trajectory": [],
+            "metadata": {},
+            "best_val_bpb": None,
+            "runs_completed": 0,
+        }
+
+        # Read trajectory.jsonl
+        traj_path = results_dir / "trajectory.jsonl"
+        if traj_path.exists():
+            for line in traj_path.read_text().splitlines():
+                line = line.strip()
+                if line:
+                    try:
+                        entry["trajectory"].append(json.loads(line))
+                    except Exception:
+                        pass
+
+        if entry["trajectory"]:
+            bpbs = [r.get("val_bpb") for r in entry["trajectory"] if r.get("val_bpb") is not None]
+            if bpbs:
+                entry["best_val_bpb"] = min(bpbs)
+            entry["runs_completed"] = len(entry["trajectory"])
+
+        # Read metadata.json
+        meta_path = results_dir / "metadata.json"
+        if meta_path.exists():
+            try:
+                entry["metadata"] = json.loads(meta_path.read_text())
+            except Exception:
+                pass
+
+        agents[agent_id] = entry
+
+    return {
+        "mode_dir": str(mode_path),
+        "agents": agents,
+        "total_agents": len(agents),
+        "best_val_bpb": min(
+            (v["best_val_bpb"] for v in agents.values() if v["best_val_bpb"] is not None),
+            default=None,
+        ),
+    }
 
 
 def _write_comparison_csv(path: Path, summary: ExperimentSummary) -> None:

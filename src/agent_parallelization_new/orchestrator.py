@@ -192,6 +192,7 @@ class Orchestrator:
             slurm_partition=self.config.slurm_partition,
             slurm_gres=self.config.slurm_gres,
             slurm_time=self.config.slurm_time,
+            agent_time_budget_minutes=agent_config.time_budget_minutes,
         )
         (agent_dir / "logs").mkdir(parents=True, exist_ok=True)
         return agent_dir, workspace

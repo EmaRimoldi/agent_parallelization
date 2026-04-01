@@ -14,7 +14,7 @@ from agent_parallelization_new.outputs.reporter import write_final_comparison
 
 
 def _repo_root() -> Path:
-    return Path(__file__).parents[3]  # agent_parallelisation_new/
+    return Path(__file__).parents[2]  # src/ → repo root
 
 
 def _load_template(path: Path) -> str:

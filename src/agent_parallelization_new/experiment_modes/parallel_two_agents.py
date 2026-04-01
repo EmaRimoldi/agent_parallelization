@@ -1,4 +1,4 @@
-"""Mode 1: 2 fully independent agents × T budget."""
+"""Mode 1: N fully independent agents × T budget."""
 
 from __future__ import annotations
 
@@ -17,18 +17,18 @@ def run_parallel_experiment(
     system_prompt: str,
     first_message_template: str,
 ) -> None:
-    """Run Mode 1: 2 agents x T budget.
+    """Run Mode 1: N agents x T budget.
 
     Agents are:
     - Fully independent (no shared context, workspace, or files)
     - Launched simultaneously
-    - Both given the same time budget T
-    - Results collected only AFTER both finish
+    - All given the same time budget T
+    - Results collected only AFTER all finish
 
-    Total compute = 2T. Wall-clock time ≈ T.
+    Total compute = N×T. Wall-clock time ≈ T.
     """
     assert config.mode == "parallel", f"Expected mode=parallel, got {config.mode}"
-    assert len(config.agents) == 2, f"Parallel mode expects 2 agents, got {len(config.agents)}"
+    assert len(config.agents) >= 1, f"Parallel mode expects at least 1 agent, got {len(config.agents)}"
 
     orchestrator = Orchestrator(config=config, repo_root=repo_root)
     orchestrator.run_parallel(
