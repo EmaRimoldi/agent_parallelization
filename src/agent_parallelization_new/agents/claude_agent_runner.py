@@ -11,6 +11,7 @@ import json
 import os
 import subprocess
 import sys
+import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -110,6 +111,15 @@ class ClaudeAgentRunner(AgentRunner):
             log_fh.write(f"[{config.agent_id}] Session starting: {session_id}\n")
             log_fh.flush()
 
+            # Background thread: watches for gpu_allocated_at and starts budget clock
+            # from the moment the GPU is allocated, not after the first claude turn.
+            _stop_watcher = threading.Event()
+            threading.Thread(
+                target=self._watch_gpu_allocation,
+                args=(budget, log_fh, _stop_watcher),
+                daemon=True,
+            ).start()
+
             while True:
                 # Hard wall-clock cap
                 if budget.startup_expired():
@@ -182,14 +192,17 @@ class ClaudeAgentRunner(AgentRunner):
                     noreply_count = 0
                     total_turns += 1
 
+                    # Fallback: start clock after first turn if gpu_allocated_at never appeared
                     if not budget.budget_started():
                         budget.start_budget_clock()
                         log_fh.write(
-                            f"[{config.agent_id}] Budget clock started — "
+                            f"[{config.agent_id}] Budget clock started (fallback, no gpu_allocated_at) — "
                             f"{budget.wall_clock_budget_seconds}s remaining.\n"
                         )
                     first_turn = False
                     _enforce_min_interval(turn_elapsed, self.MIN_TURN_INTERVAL_SEC)
+
+        _stop_watcher.set()
 
         end_time = datetime.now(timezone.utc).isoformat()
         self._write_metadata(
@@ -200,6 +213,26 @@ class ClaudeAgentRunner(AgentRunner):
             total_turns=total_turns,
             budget_seconds=config.time_budget_minutes * 60,
         )
+
+    def _watch_gpu_allocation(
+        self,
+        budget: BudgetTracker,
+        log_fh,
+        stop_event: threading.Event,
+    ) -> None:
+        """Background thread: start budget clock when gpu_allocated_at appears."""
+        marker = self.workspace / "gpu_allocated_at"
+        while not stop_event.is_set():
+            if not budget.budget_started() and marker.exists():
+                budget.start_budget_clock()
+                ts = marker.read_text().strip()
+                log_fh.write(
+                    f"[{self.config.agent_id}] GPU allocated at {ts} — "
+                    f"budget clock started ({budget.wall_clock_budget_seconds}s).\n"
+                )
+                log_fh.flush()
+                return
+            stop_event.wait(2)
 
     def _run_turn(
         self,

@@ -178,7 +178,16 @@ AGENT_ID="{agent_id}"
 WORKSPACE_PATH="{workspace}"
 RESULTS_ROOT="{results_root}"
 
-# Cancel any previous worker job with the same name (prevents deadlock on re-submission)
+# If a worker is already running, reuse it and write allocation timestamp
+EXISTING_JOB=$(squeue -u "$USER" -n "worker_${{AGENT_ID}}" -h -o "%i %T" 2>/dev/null | awk '$2=="RUNNING"{{print $1}}' | head -1)
+if [ -n "$EXISTING_JOB" ]; then
+  echo "Worker already running (job $EXISTING_JOB). Reusing." >&2
+  [ -f "$WORKSPACE_PATH/gpu_allocated_at" ] || date -Iseconds > "$WORKSPACE_PATH/gpu_allocated_at"
+  echo "$EXISTING_JOB"
+  exit 0
+fi
+
+# Cancel any previous pending job with the same name (prevents deadlock on re-submission)
 squeue -u "$USER" -n "worker_${{AGENT_ID}}" -h -o "%i" 2>/dev/null | xargs -r scancel
 sleep 2
 
@@ -208,6 +217,7 @@ while true; do
   STATE=$(squeue -j "$JOB_ID" -h -o "%T" 2>/dev/null | tr -d '[:space:]')
   if [ "$STATE" = "RUNNING" ]; then
     echo "GPU allocated for $AGENT_ID (job $JOB_ID)." >&2
+    date -Iseconds > "$WORKSPACE_PATH/gpu_allocated_at"
     sleep 3   # give the worker loop a moment to start polling
     break
   elif [ -z "$STATE" ] || [ "$STATE" = "FAILED" ] || [ "$STATE" = "CANCELLED" ] || [ "$STATE" = "TIMEOUT" ]; then
