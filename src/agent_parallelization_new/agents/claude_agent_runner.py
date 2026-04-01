@@ -44,17 +44,10 @@ class ClaudeAgentRunner(AgentRunner):
     MAX_BACKOFF_SEC = 60
     FIRST_TURN_TIMEOUT_SEC = 900  # 15 min: start_gpu_worker + SLURM queue + compile + first run
     MAX_TURN_TIMEOUT_SEC = 900    # 15 min per subsequent turn
+    HEARTBEAT_INTERVAL_SEC = 30   # log "still alive" every 30s during a turn
 
     @staticmethod
     def _temperature_directive(temperature: Optional[float]) -> str:
-        """Return a system-prompt suffix that approximates the requested temperature.
-
-        The claude CLI exposes no --temperature flag.  We approximate the
-        effect via instructional wording:
-          temp ≥ 1.0  → exploratory / high-variance search style
-          temp < 0.5  → conservative / low-variance search style
-          otherwise   → no modification
-        """
         if temperature is None:
             return ""
         if temperature >= 1.0:
@@ -83,8 +76,6 @@ class ClaudeAgentRunner(AgentRunner):
         """Run the agent loop until budget expires. Writes metadata.json at end."""
         config = self.config
 
-        # Inject temperature-approximate behaviour into system prompt
-        # (claude CLI has no --temperature flag; we use instructional wording)
         effective_system_prompt = system_prompt + self._temperature_directive(
             config.temperature
         )
@@ -92,12 +83,10 @@ class ClaudeAgentRunner(AgentRunner):
         budget = BudgetTracker(
             wall_clock_budget_seconds=config.time_budget_minutes * 60,
             train_time_budget_seconds=config.train_time_budget_seconds,
-            startup_deadline_seconds=config.time_budget_minutes * 60 + 300,  # full budget + 5 min buffer
+            startup_deadline_seconds=config.time_budget_minutes * 60 + 300,
         )
 
-        # Unique session ID (never shared between agents)
         session_id = f"{experiment_id}-{config.agent_id}-{int(time.time())}-{os.getpid()}"
-
         env = self._build_env(run_id, experiment_id)
         session_log = self.logs_dir / "run_agent.log"
 
@@ -111,16 +100,16 @@ class ClaudeAgentRunner(AgentRunner):
             log_fh.write(f"[{config.agent_id}] Session starting: {session_id}\n")
             log_fh.flush()
 
-            # Background thread: watches for gpu_allocated_at and starts budget clock
-            # from the moment the GPU is allocated, not after the first claude turn.
             _stop_watcher = threading.Event()
+
+            # GPU allocation watcher — starts budget clock
             threading.Thread(
                 target=self._watch_gpu_allocation,
                 args=(budget, log_fh, _stop_watcher),
                 daemon=True,
             ).start()
 
-            # Background thread: logs workspace events (trigger, result, val_bpb)
+            # Workspace event watcher — training trigger/result/file changes
             threading.Thread(
                 target=self._watch_workspace_events,
                 args=(log_fh, _stop_watcher),
@@ -128,7 +117,6 @@ class ClaudeAgentRunner(AgentRunner):
             ).start()
 
             while True:
-                # Hard wall-clock cap
                 if budget.startup_expired():
                     msg = f"[{config.agent_id}] ABORT: no successful turn within startup deadline.\n"
                     log_fh.write(msg)
@@ -139,12 +127,10 @@ class ClaudeAgentRunner(AgentRunner):
                     log_fh.write(f"[{config.agent_id}] Budget expired — stopping.\n")
                     break
 
-                # Build turn message
                 if first_turn:
                     turn_msg = first_message
-                    # First turn can include GPU queue wait + compile + first training run,
-                    # so give it the full remaining budget rather than a fixed cap.
                     turn_timeout = max(self.FIRST_TURN_TIMEOUT_SEC, budget.remaining_seconds())
+                    log_fh.write(f"[{config.agent_id}] Turn {total_turns} starting (first turn).\n")
                 else:
                     mins_left = budget.remaining_minutes()
                     turn_msg = (
@@ -152,26 +138,33 @@ class ClaudeAgentRunner(AgentRunner):
                         f"Keep modifying train.py and running experiments to improve val_bpb. "
                         f"Do NOT stop until time runs out."
                     )
-                    remaining = budget.remaining_seconds()
-                    turn_timeout = min(int(remaining), self.MAX_TURN_TIMEOUT_SEC)
-
-                log_fh.write(
-                    f"[{config.agent_id}] Turn {total_turns} starting "
-                    f"({'first turn' if first_turn else f'~{budget.remaining_minutes()} min remaining'}).\n"
-                )
+                    turn_timeout = min(int(budget.remaining_seconds()), self.MAX_TURN_TIMEOUT_SEC)
+                    log_fh.write(f"[{config.agent_id}] Turn {total_turns} starting (~{mins_left} min remaining).\n")
                 log_fh.flush()
+
                 turn_start = time.monotonic()
+
+                # Heartbeat thread: logs "still alive" every HEARTBEAT_INTERVAL_SEC
+                _turn_done = threading.Event()
+                threading.Thread(
+                    target=self._heartbeat,
+                    args=(config.agent_id, total_turns, turn_start, _turn_done, log_fh),
+                    daemon=True,
+                ).start()
+
                 exit_code, output = self._run_turn(
                     turn_msg=turn_msg,
                     session_id=session_id,
                     system_prompt=effective_system_prompt,
                     timeout_seconds=turn_timeout,
                     env=env,
+                    log_fh=log_fh,
                 )
+                _turn_done.set()
                 turn_elapsed = time.monotonic() - turn_start
 
                 log_fh.write(
-                    f"[{config.agent_id}] Turn {total_turns}: exit={exit_code} elapsed={turn_elapsed:.1f}s\n"
+                    f"[{config.agent_id}] Turn {total_turns} finished: exit={exit_code} elapsed={turn_elapsed:.1f}s\n"
                 )
                 if output:
                     log_fh.write(output[:2000] + ("\n...(truncated)\n" if len(output) > 2000 else "\n"))
@@ -199,12 +192,10 @@ class ClaudeAgentRunner(AgentRunner):
                         log_fh.write(f"[{config.agent_id}] Session rotated to {session_id}\n")
                     _enforce_min_interval(turn_elapsed, self.MIN_TURN_INTERVAL_SEC)
                 else:
-                    # Successful turn
                     backoff = self.INITIAL_BACKOFF_SEC
                     noreply_count = 0
                     total_turns += 1
 
-                    # Fallback: start clock after first turn if gpu_allocated_at never appeared
                     if not budget.budget_started():
                         budget.start_budget_clock()
                         log_fh.write(
@@ -226,13 +217,17 @@ class ClaudeAgentRunner(AgentRunner):
             budget_seconds=config.time_budget_minutes * 60,
         )
 
+    # ------------------------------------------------------------------
+    # Background threads
+    # ------------------------------------------------------------------
+
     def _watch_gpu_allocation(
         self,
         budget: BudgetTracker,
         log_fh,
         stop_event: threading.Event,
     ) -> None:
-        """Background thread: start budget clock when gpu_allocated_at appears."""
+        """Start budget clock when gpu_allocated_at appears."""
         marker = self.workspace / "gpu_allocated_at"
         while not stop_event.is_set():
             if not budget.budget_started() and marker.exists():
@@ -251,32 +246,59 @@ class ClaudeAgentRunner(AgentRunner):
         log_fh,
         stop_event: threading.Event,
     ) -> None:
-        """Background thread: log key workspace file events as they happen."""
+        """Log key workspace file events: trigger, result, train.py edits, results.tsv rows."""
         ws = self.workspace
         agent_id = self.config.agent_id
 
         trigger = ws / "run.trigger"
         result = ws / "run.result"
         train_out = ws / "logs" / "train_current.out"
+        train_py = ws / "train.py"
+        results_tsv = ws / "results" / "results.tsv"
 
         trigger_seen = False
         result_seen = False
         run_count = 0
+        train_py_mtime: Optional[float] = None
+        results_tsv_lines = 0
 
         while not stop_event.is_set():
-            # Trigger appeared → training started
+            # train.py modified → agent is experimenting
+            try:
+                mtime = train_py.stat().st_mtime if train_py.exists() else None
+                if mtime is not None and mtime != train_py_mtime:
+                    if train_py_mtime is not None:
+                        log_fh.write(f"[{agent_id}] train.py modified.\n")
+                        log_fh.flush()
+                    train_py_mtime = mtime
+            except OSError:
+                pass
+
+            # results.tsv new row → agent logged a result
+            try:
+                if results_tsv.exists():
+                    lines = [l for l in results_tsv.read_text().splitlines() if l.strip()]
+                    if len(lines) > results_tsv_lines:
+                        for row in lines[results_tsv_lines:]:
+                            if not row.startswith("commit"):  # skip header
+                                log_fh.write(f"[{agent_id}] results.tsv: {row}\n")
+                        results_tsv_lines = len(lines)
+                        log_fh.flush()
+            except OSError:
+                pass
+
+            # run.trigger appeared → training started
             if not trigger_seen and trigger.exists():
                 trigger_seen = True
                 result_seen = False
                 run_count += 1
-                log_fh.write(f"[{agent_id}] Training run #{run_count} started (trigger dropped).\n")
+                log_fh.write(f"[{agent_id}] Training run #{run_count} started.\n")
                 log_fh.flush()
 
-            # Result appeared → training finished
+            # run.result appeared → training finished
             if trigger_seen and not result_seen and result.exists():
                 result_seen = True
                 trigger_seen = False
-                # Read val_bpb from result or train_current.out
                 val_bpb = None
                 try:
                     for src in (result, train_out):
@@ -292,15 +314,33 @@ class ClaudeAgentRunner(AgentRunner):
                 if val_bpb:
                     log_fh.write(f"[{agent_id}] Training run #{run_count} done — val_bpb: {val_bpb}\n")
                 else:
-                    content = ""
+                    status = ""
                     try:
-                        content = result.read_text().strip().splitlines()[0] if result.exists() else "no result"
+                        status = result.read_text().strip().splitlines()[0] if result.exists() else "no result"
                     except OSError:
                         pass
-                    log_fh.write(f"[{agent_id}] Training run #{run_count} done — {content}\n")
+                    log_fh.write(f"[{agent_id}] Training run #{run_count} done — {status}\n")
                 log_fh.flush()
 
             stop_event.wait(2)
+
+    def _heartbeat(
+        self,
+        agent_id: str,
+        turn_num: int,
+        turn_start: float,
+        done_event: threading.Event,
+        log_fh,
+    ) -> None:
+        """Log 'still alive' every HEARTBEAT_INTERVAL_SEC during a turn."""
+        while not done_event.wait(self.HEARTBEAT_INTERVAL_SEC):
+            elapsed = time.monotonic() - turn_start
+            log_fh.write(f"[{agent_id}] Turn {turn_num} still running ({elapsed:.0f}s elapsed).\n")
+            log_fh.flush()
+
+    # ------------------------------------------------------------------
+    # Core turn execution
+    # ------------------------------------------------------------------
 
     def _run_turn(
         self,
@@ -309,44 +349,65 @@ class ClaudeAgentRunner(AgentRunner):
         system_prompt: str,
         timeout_seconds: int,
         env: dict,
+        log_fh,
     ) -> tuple[int, str]:
-        """Invoke `claude --print` for one turn. Returns (exit_code, output)."""
+        """Invoke `claude --print` for one turn, streaming output to log in real-time."""
         cmd = [
             "claude",
             "--print",
             "--output-format", "text",
             "--dangerously-skip-permissions",
         ]
-
-        # Pass system prompt if provided — Claude Code CLI supports --system-prompt flag
         if system_prompt:
             cmd += ["--system-prompt", system_prompt]
-
-        # Prompt is a positional argument (not --message) in claude CLI ≥2.x
         cmd += [turn_msg]
 
+        output_lines: list[str] = []
+
         try:
-            result = subprocess.run(
+            proc = subprocess.Popen(
                 cmd,
                 cwd=str(self.workspace),
                 env=env,
-                capture_output=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
-                timeout=timeout_seconds,
             )
-            output = result.stdout
-            if result.stderr:
-                output += "\n[stderr]\n" + result.stderr
-            return result.returncode, output
-        except subprocess.TimeoutExpired:
-            return -1, f"[timeout after {timeout_seconds}s]"
+
+            # Stream stdout in real-time
+            def _stream_stdout():
+                for line in proc.stdout:
+                    output_lines.append(line)
+                    log_fh.write(f"  {line}" if not line.startswith("[") else line)
+                    log_fh.flush()
+
+            stdout_thread = threading.Thread(target=_stream_stdout, daemon=True)
+            stdout_thread.start()
+
+            try:
+                proc.wait(timeout=timeout_seconds)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
+                return -1, f"[timeout after {timeout_seconds}s]"
+
+            stdout_thread.join(timeout=5)
+            stderr = proc.stderr.read()
+            output = "".join(output_lines)
+            if stderr:
+                output += "\n[stderr]\n" + stderr
+            return proc.returncode, output
+
         except FileNotFoundError:
             return -2, "[claude CLI not found in PATH]"
         except Exception as e:
             return -3, f"[exception: {e}]"
 
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
     def _build_env(self, run_id: str, experiment_id: str) -> dict:
-        """Build environment variables for the agent subprocess."""
         env = os.environ.copy()
         env["RUN_ID"] = run_id
         env["AGENT_ID"] = self.config.agent_id
@@ -354,7 +415,6 @@ class ClaudeAgentRunner(AgentRunner):
         env["AUTOSEARCH_TIME_BUDGET"] = str(self.config.train_time_budget_seconds)
         env["CUDA_VISIBLE_DEVICES"] = self.config.cuda_device
         env["EXPERIMENT_ID"] = experiment_id
-        # Ensure uv/python3 are findable
         extra_path = ":".join([
             str(Path.home() / ".local" / "bin"),
             str(Path.home() / "miniforge3" / "bin"),
@@ -371,7 +431,6 @@ class ClaudeAgentRunner(AgentRunner):
         total_turns: int,
         budget_seconds: int,
     ) -> None:
-        """Write metadata.json to results dir."""
         metadata = {
             "agent_id": self.config.agent_id,
             "run_id": run_id,
@@ -385,7 +444,6 @@ class ClaudeAgentRunner(AgentRunner):
         meta_path = self.results_dir / "metadata.json"
         meta_path.write_text(json.dumps(metadata, indent=2))
 
-        # Count training runs from trajectory.jsonl
         traj_path = self.results_dir / "trajectory.jsonl"
         if traj_path.exists():
             lines = [l for l in traj_path.read_text().splitlines() if l.strip()]
@@ -400,6 +458,5 @@ class ClaudeAgentRunner(AgentRunner):
 
 
 def _enforce_min_interval(elapsed: float, min_interval: float) -> None:
-    """Sleep to ensure at least min_interval seconds between turns."""
     if elapsed < min_interval:
         time.sleep(min_interval - elapsed)
