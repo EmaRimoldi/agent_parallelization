@@ -18,3 +18,6 @@ results/
 # OS
 .DS_Store
 *.swp
+
+# Claude Code project settings
+.claude/
