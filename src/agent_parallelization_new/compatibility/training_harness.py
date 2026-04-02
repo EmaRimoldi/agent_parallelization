@@ -125,6 +125,58 @@ fi
 # SLURM persistent-worker scripts (preferred — one GPU allocation per agent)
 # ---------------------------------------------------------------------------
 
+def generate_worker_loop_sh(
+    workspace: Path,
+    uv_bin: str,
+    path_additions: str,
+) -> Path:
+    """Write worker_loop.sh — the actual SLURM job body.
+
+    Keeping this in a separate file avoids all --wrap double-quote expansion
+    issues: every $VAR and $(cmd) here is a plain shell variable, evaluated
+    on the compute node where the file is executed, not on the login node.
+    """
+    script = f"""#!/bin/bash
+# worker_loop.sh — persistent GPU worker job body.
+# Submitted by start_gpu_worker.sh; runs entirely on the compute node.
+set -uo pipefail
+export PATH="{path_additions}:$PATH"
+cd "{workspace}"
+mkdir -p logs
+
+# Detect CUDA stubs dir so Triton can compile its driver helper (libcuda.so).
+for _cuda_stubs in /usr/local/cuda/lib64/stubs /usr/local/cuda-*/lib64/stubs /cm/shared/apps/cuda/current/lib64/stubs; do
+  if [ -f "$_cuda_stubs/libcuda.so" ]; then
+    export TRITON_LIBCUDA_PATH="$_cuda_stubs"
+    break
+  fi
+done
+
+RUN_COUNT=0
+while [ ! -f stop_worker ]; do
+  if [ -f run.trigger ]; then
+    rm -f run.trigger run.result
+    RUN_COUNT=$((RUN_COUNT + 1))
+    RUN_LOG=$(printf 'logs/train_run_%03d.out' "$RUN_COUNT")
+    {uv_bin} run train.py > "$RUN_LOG" 2>&1
+    cp "$RUN_LOG" logs/train_current.out
+    VAL=$(grep 'val_bpb:' logs/train_current.out 2>/dev/null | head -1 | awk '{{print $2}}') || VAL=""
+    VRAM=$(grep 'peak_vram_mb:' logs/train_current.out 2>/dev/null | head -1 | awk '{{print $2}}') || VRAM=""
+    if [ -n "$VAL" ]; then
+      {{ echo TRAINING DONE; echo val_bpb: "$VAL"; [ -n "$VRAM" ] && echo peak_vram_mb: "$VRAM"; }} > run.result
+    else
+      {{ echo TRAINING FAILED; tail -30 logs/train_current.out; }} > run.result
+    fi
+  fi
+  sleep 2
+done
+"""
+    out = workspace / "worker_loop.sh"
+    out.write_text(script)
+    out.chmod(out.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    return out
+
+
 def generate_start_gpu_worker_sh(
     workspace: Path,
     agent_id: str,
@@ -135,8 +187,8 @@ def generate_start_gpu_worker_sh(
 ) -> Path:
     """Write start_gpu_worker.sh into workspace.
 
-    Submits a single long-lived SLURM job that holds the GPU for the full
-    agent budget.  The job runs a 2-second poll loop:
+    Submits a single long-lived SLURM job (worker_loop.sh) that holds the GPU
+    for the full agent budget.  The job runs a 2-second poll loop:
       - waits for run.trigger to appear (written by run_on_worker.sh)
       - runs train.py, writes val_bpb / error to run.result
       - removes trigger, waits for next iteration
@@ -148,37 +200,9 @@ def generate_start_gpu_worker_sh(
     path_additions = _path_additions()
     uv_bin = _find_bin("uv")
 
-    # The worker loop is embedded in --wrap so no separate script file is
-    # needed on the compute node's local filesystem.
-    worker_loop = (
-        f"export PATH=\\\"{path_additions}:\\$PATH\\\" && "
-        f"cd \\\"{workspace}\\\" && "
-        f"mkdir -p logs && "
-        # Detect CUDA stubs directory so Triton can compile its driver helper.
-        # libcuda.so is not in the standard linker path on some cluster setups;
-        # TRITON_LIBCUDA_PATH tells Triton exactly where to find it.
-        f"for _cuda_stubs in /usr/local/cuda/lib64/stubs /usr/local/cuda-*/lib64/stubs /cm/shared/apps/cuda/current/lib64/stubs; do "
-        f"  [ -f \\\"$_cuda_stubs/libcuda.so\\\" ] && export TRITON_LIBCUDA_PATH=\\\"$_cuda_stubs\\\" && break; "
-        f"done; "
-        f"RUN_COUNT=0 && "
-        f"while [ ! -f stop_worker ]; do "
-        f"  if [ -f run.trigger ]; then "
-        f"    rm -f run.trigger run.result; "
-        f"    RUN_COUNT=$((RUN_COUNT + 1)); "
-        f"    RUN_LOG=$(printf 'logs/train_run_%03d.out' $RUN_COUNT); "
-        f"    {uv_bin} run train.py > \\\"$RUN_LOG\\\" 2>&1; "
-        f"    cp \\\"$RUN_LOG\\\" logs/train_current.out; "
-        f"    VAL=$(grep 'val_bpb:' logs/train_current.out | head -1 | awk '{{print $2}}'); "
-        f"    VRAM=$(grep 'peak_vram_mb:' logs/train_current.out | head -1 | awk '{{print $2}}'); "
-        f"    if [ -n \\\"$VAL\\\" ]; then "
-        f"      {{ echo TRAINING DONE; echo val_bpb: $VAL; [ -n \\\"$VRAM\\\" ] && echo peak_vram_mb: $VRAM; }} > run.result; "
-        f"    else "
-        f"      {{ echo TRAINING FAILED; tail -30 logs/train_current.out; }} > run.result; "
-        f"    fi; "
-        f"  fi; "
-        f"  sleep 2; "
-        f"done"
-    )
+    # Write the worker loop as a separate file so all shell variables are
+    # evaluated on the compute node, not expanded by the login shell.
+    generate_worker_loop_sh(workspace, uv_bin, path_additions)
 
     script = f"""#!/bin/bash
 # start_gpu_worker.sh — allocate a GPU for the full agent budget and start
@@ -188,8 +212,9 @@ AGENT_ID="{agent_id}"
 WORKSPACE_PATH="{workspace}"
 RESULTS_ROOT="{results_root}"
 
-# If a worker is already running, reuse it and write allocation timestamp
-EXISTING_JOB=$(squeue -u "$USER" -n "worker_${{AGENT_ID}}" -h -o "%i %T" 2>/dev/null | awk '$2=="RUNNING"{{print $1}}' | head -1)
+# If a worker is already running for THIS workspace, reuse it.
+EXISTING_JOB=$(squeue -u "$USER" -n "worker_${{AGENT_ID}}" -h -o "%i %T %Z" 2>/dev/null \
+  | awk -v ws="$WORKSPACE_PATH" '$2=="RUNNING" && $3==ws {{print $1}}' | head -1)
 if [ -n "$EXISTING_JOB" ]; then
   echo "Worker already running (job $EXISTING_JOB). Reusing." >&2
   [ -f "$WORKSPACE_PATH/gpu_allocated_at" ] || date -Iseconds > "$WORKSPACE_PATH/gpu_allocated_at"
@@ -218,7 +243,12 @@ JOB_ID=$(sbatch \\
   --output="$WORKSPACE_PATH/logs/worker_%j.out" \\
   --error="$WORKSPACE_PATH/logs/worker_%j.err" \\
   --export=ALL,RUN_ID="${{RUN_ID:-run}}",AGENT_ID="${{AGENT_ID}}",RESULTS_ROOT="${{RESULTS_ROOT}}" \\
-  --wrap="{worker_loop}")
+  "$WORKSPACE_PATH/worker_loop.sh")
+
+if [ -z "$JOB_ID" ]; then
+  echo "ERROR: sbatch returned empty job ID" >&2
+  exit 1
+fi
 
 # Wait for the job to leave the queue and actually start running.
 # This blocks until a GPU is allocated — agents start staggered as GPUs free up.
