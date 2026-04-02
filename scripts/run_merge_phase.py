@@ -7,12 +7,11 @@ script:
   2. Selects the best and most informative train.py variants
   3. Analyses per-parameter improvement correlations
   4. Produces a merged train.py candidate
-  5. Optionally runs evaluation via SLURM
+  5. Runs evaluation via SLURM (always; workspace auto-detected if not provided)
   6. Writes a merge report and comparison table
 
 Usage:
     python scripts/run_merge_phase.py --experiment-dir runs/experiment_parallel_20260331_120000
-    python scripts/run_merge_phase.py --experiment-dir runs/exp_... --evaluate
     python scripts/run_merge_phase.py --experiment-dir runs/exp_... --source-mode parallel
 """
 from __future__ import annotations
@@ -40,10 +39,6 @@ def main(argv=None) -> None:
     parser.add_argument(
         "--autoresearch-dir", default=None,
         help="Path to autoresearch/ dir. Defaults to <repo_root>/autoresearch.",
-    )
-    parser.add_argument(
-        "--evaluate", action="store_true",
-        help="Attempt to evaluate the merged candidate via SLURM after producing it.",
     )
     parser.add_argument(
         "--evaluation-workspace", default=None,
@@ -76,7 +71,7 @@ def main(argv=None) -> None:
     print(f"[merge] Experiment:      {experiment_dir}")
     print(f"[merge] Source mode:     {args.source_mode}")
     print(f"[merge] Autoresearch:    {autoresearch_dir}")
-    print(f"[merge] Run evaluation:  {args.evaluate}")
+    print(f"[merge] Run evaluation:  always")
     print(f"[merge] Merge mode:      {'deterministic' if args.deterministic else 'agent-based'}")
     if agent_based:
         print(f"[merge] Agent model:     {args.agent_model}")
@@ -92,7 +87,6 @@ def main(argv=None) -> None:
         else None
     )
     results = merger.run(
-        evaluate=args.evaluate,
         evaluation_workspace=evaluation_workspace,
         agent_based=agent_based,
         agent_model=args.agent_model,

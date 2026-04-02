@@ -578,21 +578,22 @@ class MergeOrchestrator:
     def run(
         self,
         baseline_train_py: Optional[Path] = None,
-        evaluate: bool = False,
         evaluation_workspace: Optional[Path] = None,
         agent_based: bool = True,
         agent_model: str = "claude-opus-4-6",
     ) -> MergeResults:
         """Execute the full merge pipeline.
 
+        Evaluation is always performed: after producing the merged candidate,
+        a training run is submitted to measure its val_bpb.
+
         Parameters
         ----------
         baseline_train_py : Path, optional
             Original unmodified train.py. Used as merge base fallback.
-        evaluate : bool
-            If True, actually run training to evaluate the merged candidate.
         evaluation_workspace : Path, optional
             Pre-configured workspace with submit/check scripts for evaluation.
+            Auto-detected from the first agent workspace if not provided.
         agent_based : bool
             If True (default), use a Claude agent to produce the merged candidate.
             If False, use the deterministic parameter-level merge.
@@ -666,15 +667,28 @@ class MergeOrchestrator:
             json.dumps(plan.to_dict(), indent=2)
         )
 
-        # Step 5: Evaluate (optional)
+        # Step 5: Evaluate — always run; auto-detect workspace if not supplied
+        if evaluation_workspace is None:
+            for agent_dir in sorted(self.mode_dir.glob("agent_*")):
+                ws = agent_dir / "workspace"
+                if (ws / "submit_training.sh").exists():
+                    evaluation_workspace = ws
+                    print(f"[merger] Auto-detected evaluation workspace: {ws}")
+                    break
+        if evaluation_workspace is None:
+            print(
+                "[merger] Step 5: No evaluation workspace found — skipping evaluation.",
+                file=__import__("sys").stderr,
+            )
+
         merge_val_bpb: Optional[float] = None
-        if evaluate and evaluation_workspace is not None:
+        if evaluation_workspace is not None:
             print("[merger] Step 5: Evaluating merged candidate...")
             merge_val_bpb = self.evaluate_candidate(merged, evaluation_workspace)
             merged.val_bpb = merge_val_bpb
             print(f"[merger] Merged val_bpb = {merge_val_bpb}")
         else:
-            print("[merger] Step 5: Skipping evaluation (evaluate=False or no workspace).")
+            print("[merger] Step 5: Evaluation skipped (no workspace available).")
 
         # Step 6: Summarise
         merge_won: Optional[bool] = None
