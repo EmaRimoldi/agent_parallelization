@@ -159,7 +159,7 @@ def generate_start_gpu_worker_sh(
         # TRITON_LIBCUDA_PATH tells Triton exactly where to find it.
         f"for _cuda_stubs in /usr/local/cuda/lib64/stubs /usr/local/cuda-*/lib64/stubs /cm/shared/apps/cuda/current/lib64/stubs; do "
         f"  [ -f \\\"$_cuda_stubs/libcuda.so\\\" ] && export TRITON_LIBCUDA_PATH=\\\"$_cuda_stubs\\\" && break; "
-        f"done && "
+        f"done; "
         f"RUN_COUNT=0 && "
         f"while [ ! -f stop_worker ]; do "
         f"  if [ -f run.trigger ]; then "
