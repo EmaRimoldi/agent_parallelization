@@ -264,14 +264,16 @@ class ClaudeAgentRunner(AgentRunner):
         run_count = 0
         train_py_mtime: Optional[float] = None
         results_tsv_lines = 0
+        train_out_lines = 0
 
         while not stop_event.is_set():
-            # train.py modified → agent is experimenting
+            # train.py modified → log diff vs baseline so we see what changed
             try:
                 mtime = train_py.stat().st_mtime if train_py.exists() else None
                 if mtime is not None and mtime != train_py_mtime:
                     if train_py_mtime is not None:
                         log_fh.write(f"[{agent_id}] train.py modified.\n")
+                        _log_train_diff(train_py, log_fh, agent_id)
                         log_fh.flush()
                     train_py_mtime = mtime
             except OSError:
@@ -295,8 +297,23 @@ class ClaudeAgentRunner(AgentRunner):
                 trigger_seen = True
                 result_seen = False
                 run_count += 1
+                train_out_lines = 0  # reset stream cursor for new run
                 log_fh.write(f"[{agent_id}] Training run #{run_count} started.\n")
                 log_fh.flush()
+
+            # stream new lines from train_current.out while a run is active
+            if trigger_seen and not result_seen:
+                try:
+                    if train_out.exists():
+                        all_lines = train_out.read_text().splitlines()
+                        new_lines = all_lines[train_out_lines:]
+                        for line in new_lines:
+                            log_fh.write(f"[{agent_id}][training] {line}\n")
+                        if new_lines:
+                            log_fh.flush()
+                        train_out_lines = len(all_lines)
+                except OSError:
+                    pass
 
             # run.result appeared → training finished
             if trigger_seen and not result_seen and result.exists():
@@ -487,6 +504,28 @@ class ClaudeAgentRunner(AgentRunner):
 def _enforce_min_interval(elapsed: float, min_interval: float) -> None:
     if elapsed < min_interval:
         time.sleep(min_interval - elapsed)
+
+
+def _log_train_diff(train_py: Path, log_fh, agent_id: str, max_lines: int = 40) -> None:
+    """Log a unified diff of train.py vs train.py.baseline."""
+    import difflib
+    baseline = train_py.parent / "train.py.baseline"
+    if not baseline.exists():
+        return
+    try:
+        old = baseline.read_text().splitlines()
+        new = train_py.read_text().splitlines()
+        diff = list(difflib.unified_diff(old, new, fromfile="train.py.baseline", tofile="train.py", lineterm="", n=2))
+        if not diff:
+            return
+        log_fh.write(f"[{agent_id}] --- train.py diff vs baseline ({len(diff)} lines) ---\n")
+        for line in diff[:max_lines]:
+            log_fh.write(f"[{agent_id}]   {line}\n")
+        if len(diff) > max_lines:
+            log_fh.write(f"[{agent_id}]   ... ({len(diff) - max_lines} more lines truncated)\n")
+        log_fh.write(f"[{agent_id}] --- end diff ---\n")
+    except OSError:
+        pass
 
 
 def _dump_slurm_failure_logs(
