@@ -142,7 +142,7 @@ class ClaudeAgentRunner(AgentRunner):
 
                 if first_turn:
                     turn_msg = first_message
-                    turn_timeout = max(self.FIRST_TURN_TIMEOUT_SEC, budget.remaining_seconds())
+                    turn_timeout = min(self.FIRST_TURN_TIMEOUT_SEC, int(budget.remaining_seconds()))
                     _log(log_fh, f"[{config.agent_id}] Turn {total_turns} starting (first turn).")
                 else:
                     mins_left = budget.remaining_minutes()
