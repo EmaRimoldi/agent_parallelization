@@ -18,6 +18,17 @@ from pathlib import Path
 from typing import Optional
 
 from agent_parallelization_new.agents.base import AgentRunner
+
+
+def _ts() -> str:
+    """Return current local time as ISO-8601 string with second precision."""
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _log(log_fh, msg: str) -> None:
+    """Write a timestamped system-event line and flush."""
+    log_fh.write(f"[{_ts()}] {msg}\n")
+    log_fh.flush()
 from agent_parallelization_new.budgeting import BudgetTracker
 from agent_parallelization_new.config import AgentConfig
 
@@ -99,8 +110,7 @@ class ClaudeAgentRunner(AgentRunner):
         first_turn = True
 
         with open(session_log, "w") as log_fh:
-            log_fh.write(f"[{config.agent_id}] Session starting: {session_id}\n")
-            log_fh.flush()
+            _log(log_fh, f"[{config.agent_id}] Session starting: {session_id}")
 
             _stop_watcher = threading.Event()
             _observed_val_bpbs: list[float] = []
@@ -121,19 +131,19 @@ class ClaudeAgentRunner(AgentRunner):
 
             while True:
                 if budget.startup_expired():
-                    msg = f"[{config.agent_id}] ABORT: no successful turn within startup deadline.\n"
-                    log_fh.write(msg)
-                    sys.stderr.write(msg)
+                    msg = f"[{config.agent_id}] ABORT: no successful turn within startup deadline."
+                    _log(log_fh, msg)
+                    sys.stderr.write(msg + "\n")
                     break
 
                 if budget.should_stop():
-                    log_fh.write(f"[{config.agent_id}] Budget expired — stopping.\n")
+                    _log(log_fh, f"[{config.agent_id}] Budget expired — stopping.")
                     break
 
                 if first_turn:
                     turn_msg = first_message
                     turn_timeout = max(self.FIRST_TURN_TIMEOUT_SEC, budget.remaining_seconds())
-                    log_fh.write(f"[{config.agent_id}] Turn {total_turns} starting (first turn).\n")
+                    _log(log_fh, f"[{config.agent_id}] Turn {total_turns} starting (first turn).")
                 else:
                     mins_left = budget.remaining_minutes()
                     turn_msg = (
@@ -142,8 +152,7 @@ class ClaudeAgentRunner(AgentRunner):
                         f"Do NOT stop until time runs out."
                     )
                     turn_timeout = min(int(budget.remaining_seconds()), self.MAX_TURN_TIMEOUT_SEC)
-                    log_fh.write(f"[{config.agent_id}] Turn {total_turns} starting (~{mins_left} min remaining).\n")
-                log_fh.flush()
+                    _log(log_fh, f"[{config.agent_id}] Turn {total_turns} starting (~{mins_left} min remaining).")
 
                 turn_start = time.monotonic()
 
@@ -166,33 +175,32 @@ class ClaudeAgentRunner(AgentRunner):
                 _turn_done.set()
                 turn_elapsed = time.monotonic() - turn_start
 
-                log_fh.write(
-                    f"[{config.agent_id}] Turn {total_turns} finished: exit={exit_code} elapsed={turn_elapsed:.1f}s\n"
-                )
+                _log(log_fh,
+                    f"[{config.agent_id}] Turn {total_turns} finished: exit={exit_code} elapsed={turn_elapsed:.1f}s")
                 if output:
                     log_fh.write(output[:2000] + ("\n...(truncated)\n" if len(output) > 2000 else "\n"))
-                log_fh.flush()
+                    log_fh.flush()
 
                 is_noreply = "No reply from agent" in output or (not output.strip() and exit_code == 0)
                 is_ratelimit = "rate limit" in output.lower() or "rate_limit" in output.lower()
                 is_error = exit_code != 0
 
                 if is_error:
-                    log_fh.write(f"[{config.agent_id}] Error turn, retrying in {backoff}s...\n")
+                    _log(log_fh, f"[{config.agent_id}] Error turn, retrying in {backoff}s...")
                     time.sleep(backoff)
                     backoff = min(backoff * 2, self.MAX_BACKOFF_SEC)
                 elif is_ratelimit:
-                    log_fh.write(f"[{config.agent_id}] Rate limit, backing off {backoff}s...\n")
+                    _log(log_fh, f"[{config.agent_id}] Rate limit, backing off {backoff}s...")
                     time.sleep(backoff)
                     backoff = min(backoff * 2, self.MAX_BACKOFF_SEC)
                 elif is_noreply:
                     noreply_count += 1
-                    log_fh.write(f"[{config.agent_id}] No-reply turn #{noreply_count}/{self.MAX_NOREPLY}\n")
+                    _log(log_fh, f"[{config.agent_id}] No-reply turn #{noreply_count}/{self.MAX_NOREPLY}")
                     if noreply_count >= self.MAX_NOREPLY:
                         noreply_count = 0
                         session_id = f"{experiment_id}-{config.agent_id}-{int(time.time())}-{os.getpid()}"
                         first_turn = True
-                        log_fh.write(f"[{config.agent_id}] Session rotated to {session_id}\n")
+                        _log(log_fh, f"[{config.agent_id}] Session rotated to {session_id}")
                     _enforce_min_interval(turn_elapsed, self.MIN_TURN_INTERVAL_SEC)
                 else:
                     backoff = self.INITIAL_BACKOFF_SEC
@@ -201,10 +209,9 @@ class ClaudeAgentRunner(AgentRunner):
 
                     if not budget.budget_started():
                         budget.start_budget_clock()
-                        log_fh.write(
+                        _log(log_fh,
                             f"[{config.agent_id}] Budget clock started (fallback, no gpu_allocated_at) — "
-                            f"{budget.wall_clock_budget_seconds}s remaining.\n"
-                        )
+                            f"{budget.wall_clock_budget_seconds}s remaining.")
                     first_turn = False
                     _enforce_min_interval(turn_elapsed, self.MIN_TURN_INTERVAL_SEC)
 
@@ -237,11 +244,9 @@ class ClaudeAgentRunner(AgentRunner):
             if not budget.budget_started() and marker.exists():
                 budget.start_budget_clock()
                 ts = marker.read_text().strip()
-                log_fh.write(
+                _log(log_fh,
                     f"[{self.config.agent_id}] GPU allocated at {ts} — "
-                    f"budget clock started ({budget.wall_clock_budget_seconds}s).\n"
-                )
-                log_fh.flush()
+                    f"budget clock started ({budget.wall_clock_budget_seconds}s).")
                 return
             stop_event.wait(2)
 
@@ -264,6 +269,7 @@ class ClaudeAgentRunner(AgentRunner):
         trigger_seen = False
         result_seen = False
         run_count = 0
+        run_wall_start: Optional[float] = None
         train_py_mtime: Optional[float] = None
         results_tsv_lines = 0
         train_out_lines = 0
@@ -274,9 +280,8 @@ class ClaudeAgentRunner(AgentRunner):
                 mtime = train_py.stat().st_mtime if train_py.exists() else None
                 if mtime is not None and mtime != train_py_mtime:
                     if train_py_mtime is not None:
-                        log_fh.write(f"[{agent_id}] train.py modified.\n")
+                        _log(log_fh, f"[{agent_id}] train.py modified.")
                         _log_train_diff(train_py, log_fh, agent_id)
-                        log_fh.flush()
                     train_py_mtime = mtime
             except OSError:
                 pass
@@ -288,9 +293,8 @@ class ClaudeAgentRunner(AgentRunner):
                     if len(lines) > results_tsv_lines:
                         for row in lines[results_tsv_lines:]:
                             if not row.startswith("commit"):  # skip header
-                                log_fh.write(f"[{agent_id}] results.tsv: {row}\n")
+                                _log(log_fh, f"[{agent_id}] results.tsv: {row}")
                         results_tsv_lines = len(lines)
-                        log_fh.flush()
             except OSError:
                 pass
 
@@ -299,9 +303,9 @@ class ClaudeAgentRunner(AgentRunner):
                 trigger_seen = True
                 result_seen = False
                 run_count += 1
+                run_wall_start = time.time()
                 train_out_lines = 0  # reset stream cursor for new run
-                log_fh.write(f"[{agent_id}] Training run #{run_count} started.\n")
-                log_fh.flush()
+                _log(log_fh, f"[{agent_id}] Training run #{run_count} started.")
 
             # stream new lines from train_current.out while a run is active
             if trigger_seen and not result_seen:
@@ -310,7 +314,7 @@ class ClaudeAgentRunner(AgentRunner):
                         all_lines = train_out.read_text().splitlines()
                         new_lines = all_lines[train_out_lines:]
                         for line in new_lines:
-                            log_fh.write(f"[{agent_id}][training] {line}\n")
+                            log_fh.write(f"[{_ts()}] [{agent_id}][training] {line}\n")
                         if new_lines:
                             log_fh.flush()
                         train_out_lines = len(all_lines)
@@ -321,6 +325,7 @@ class ClaudeAgentRunner(AgentRunner):
             if trigger_seen and not result_seen and result.exists():
                 result_seen = True
                 trigger_seen = False
+                elapsed = f"{time.time() - run_wall_start:.0f}s" if run_wall_start else "?s"
                 val_bpb = None
                 try:
                     for src in (result, train_out):
@@ -338,16 +343,15 @@ class ClaudeAgentRunner(AgentRunner):
                         observed_val_bpbs.append(float(val_bpb))
                     except ValueError:
                         pass
-                    log_fh.write(f"[{agent_id}] Training run #{run_count} done — val_bpb: {val_bpb}\n")
+                    _log(log_fh, f"[{agent_id}] Training run #{run_count} done — val_bpb: {val_bpb} (elapsed: {elapsed})")
                 else:
                     status = ""
                     try:
                         status = result.read_text().strip().splitlines()[0] if result.exists() else "no result"
                     except OSError:
                         pass
-                    log_fh.write(f"[{agent_id}] Training run #{run_count} done — {status}\n")
+                    _log(log_fh, f"[{agent_id}] Training run #{run_count} done — {status} (elapsed: {elapsed})")
                     _dump_slurm_failure_logs(ws, agent_id, run_count, log_fh)
-                log_fh.flush()
 
             stop_event.wait(2)
 
@@ -362,8 +366,7 @@ class ClaudeAgentRunner(AgentRunner):
         """Log 'still alive' every HEARTBEAT_INTERVAL_SEC during a turn."""
         while not done_event.wait(self.HEARTBEAT_INTERVAL_SEC):
             elapsed = time.monotonic() - turn_start
-            log_fh.write(f"[{agent_id}] Turn {turn_num} still running ({elapsed:.0f}s elapsed).\n")
-            log_fh.flush()
+            _log(log_fh, f"[{agent_id}] Turn {turn_num} still running ({elapsed:.0f}s elapsed).")
 
     # ------------------------------------------------------------------
     # Core turn execution
