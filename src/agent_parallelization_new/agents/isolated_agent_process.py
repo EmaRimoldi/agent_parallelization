@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import multiprocessing
 import os
+import signal
 import sys
 import time
 from pathlib import Path
@@ -41,6 +42,19 @@ def _agent_worker(
     agent_dir = Path(agent_dir_str)
 
     runner = ClaudeAgentRunner(config=config, workspace=workspace, agent_dir=agent_dir)
+
+    # When the orchestrator terminates this process (SIGTERM), also kill the
+    # active claude subprocess so it doesn't linger as an orphan.
+    def _sigterm_handler(signum, frame):
+        if runner._active_proc is not None:
+            try:
+                runner._active_proc.kill()
+            except Exception:
+                pass
+        sys.exit(1)
+
+    signal.signal(signal.SIGTERM, _sigterm_handler)
+
     runner.run(
         run_id=run_id,
         experiment_id=experiment_id,

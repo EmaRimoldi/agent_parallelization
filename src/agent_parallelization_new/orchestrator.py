@@ -17,7 +17,11 @@ Must NOT:
 
 from __future__ import annotations
 
+import atexit
 import json
+import signal
+import subprocess
+import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -43,6 +47,53 @@ class Orchestrator:
         self.config = config
         self.repo_root = repo_root
         self.autoresearch_dir = repo_root / config.autoresearch_dir
+        self._processes: list[IsolatedAgentProcess] = []
+        self._cleanup_done = False
+
+    # ------------------------------------------------------------------
+    # Graceful shutdown: SIGTERM / SIGINT / atexit
+    # ------------------------------------------------------------------
+
+    def _register_cleanup(self) -> None:
+        """Register cleanup handlers once per orchestrator instance."""
+        atexit.register(self._cleanup)
+        signal.signal(signal.SIGTERM, self._handle_signal)
+        signal.signal(signal.SIGINT, self._handle_signal)
+
+    def _handle_signal(self, signum: int, frame) -> None:
+        print(f"\n[orchestrator] Signal {signum} received — shutting down.", flush=True)
+        self._cleanup()
+        sys.exit(1)
+
+    def _cleanup(self) -> None:
+        """Terminate all agent processes and cancel their SLURM worker jobs."""
+        if self._cleanup_done:
+            return
+        self._cleanup_done = True
+
+        # 1. Gracefully terminate agent processes, then force-kill stragglers.
+        for proc in self._processes:
+            if proc.is_alive():
+                proc.terminate()
+        time.sleep(3)
+        for proc in self._processes:
+            if proc.is_alive():
+                proc.kill()
+
+        # 2. Cancel SLURM worker jobs for every agent in this experiment.
+        for agent in self.config.agents:
+            try:
+                subprocess.run(
+                    ["bash", "-c",
+                     f'squeue -u "$USER" -n "worker_{agent.agent_id}" -h -o "%i" 2>/dev/null'
+                     " | xargs -r scancel"],
+                    capture_output=True,
+                    timeout=15,
+                )
+            except Exception:
+                pass
+
+        print("[orchestrator] Cleanup complete.", flush=True)
 
     def run_parallel(
         self,
@@ -85,6 +136,9 @@ class Orchestrator:
             hard_deadlines.append(
                 time.monotonic() + agent_config.time_budget_minutes * 60 * 3
             )
+
+        self._register_cleanup()
+        self._processes = processes
 
         # Launch all agents simultaneously — no stagger, no communication
         for proc in processes:
@@ -131,6 +185,9 @@ class Orchestrator:
             system_prompt=system_prompt,
             first_message=first_message,
         )
+
+        self._register_cleanup()
+        self._processes = [proc]
 
         hard_deadline = time.monotonic() + agent_config.time_budget_minutes * 60 * 3
         proc.start()

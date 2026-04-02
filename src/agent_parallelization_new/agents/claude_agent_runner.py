@@ -80,6 +80,8 @@ class ClaudeAgentRunner(AgentRunner):
             config.temperature
         )
 
+        self._active_proc: Optional[subprocess.Popen] = None
+
         budget = BudgetTracker(
             wall_clock_budget_seconds=config.time_budget_minutes * 60,
             train_time_budget_seconds=config.train_time_budget_seconds,
@@ -398,6 +400,7 @@ class ClaudeAgentRunner(AgentRunner):
                 stderr=subprocess.PIPE,
                 text=True,
             )
+            self._active_proc = proc
 
             # Stream stdout in real-time
             def _stream_stdout():
@@ -418,6 +421,7 @@ class ClaudeAgentRunner(AgentRunner):
 
             stdout_thread.join(timeout=5)
             stderr = proc.stderr.read()
+            self._active_proc = None
             output = "".join(output_lines)
             if stderr:
                 output += "\n[stderr]\n" + stderr
