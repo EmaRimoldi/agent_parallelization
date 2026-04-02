@@ -194,6 +194,7 @@ class Orchestrator:
         print(f"[orchestrator] Launched single agent {agent_config.agent_id}.")
         self._wait_for_all([proc], [hard_deadline])
         print("[orchestrator] Single agent finished.")
+        self._finalize_single_long(experiment_dir, agent_config)
 
     def run_merge(
         self,
@@ -253,6 +254,89 @@ class Orchestrator:
         )
         (agent_dir / "logs").mkdir(parents=True, exist_ok=True)
         return agent_dir, workspace
+
+    def _finalize_single_long(
+        self, experiment_dir: Path, agent_config: AgentConfig
+    ) -> None:
+        """Post-run finalization for single_long mode.
+
+        Reads results/results.tsv from the agent workspace, identifies the
+        best val_bpb commit, checks it out in the workspace, and writes a
+        final report.  Runs after the agent process exits so it never races
+        with an active agent.
+        """
+        import csv
+        import subprocess as _sp
+
+        agent_dir = experiment_dir / "mode_single_long" / agent_config.agent_id
+        workspace = agent_dir / "workspace"
+        results_tsv = workspace / "results" / "results.tsv"
+        report_path = agent_dir / "final_report.txt"
+
+        print("[orchestrator] Running single_long finalization...")
+
+        if not results_tsv.exists():
+            print("[orchestrator] No results.tsv found — skipping finalization.")
+            return
+
+        # Parse results.tsv for the best (lowest) val_bpb commit
+        best_commit: Optional[str] = None
+        best_bpb: Optional[float] = None
+        rows: list[dict] = []
+        try:
+            with open(results_tsv) as f:
+                reader = csv.DictReader(f, delimiter="\t")
+                for row in reader:
+                    rows.append(row)
+                    try:
+                        bpb = float(row["val_bpb"])
+                        if best_bpb is None or bpb < best_bpb:
+                            best_bpb = bpb
+                            best_commit = row["commit"]
+                    except (KeyError, ValueError):
+                        pass
+        except Exception as e:
+            print(f"[orchestrator] Failed to parse results.tsv: {e}")
+            return
+
+        if best_commit is None:
+            print("[orchestrator] No valid val_bpb rows in results.tsv — skipping.")
+            return
+
+        print(f"[orchestrator] Best result: commit={best_commit} val_bpb={best_bpb}")
+
+        # Checkout the best commit in the workspace
+        try:
+            _sp.run(
+                ["git", "checkout", best_commit, "--", "train.py"],
+                cwd=workspace,
+                check=True,
+                capture_output=True,
+            )
+            print(f"[orchestrator] Checked out train.py from commit {best_commit}.")
+        except _sp.CalledProcessError as e:
+            print(f"[orchestrator] git checkout failed: {e.stderr.decode().strip()}")
+
+        # Write final report
+        ts = datetime.now(timezone.utc).isoformat()
+        lines = [
+            f"single_long finalization report",
+            f"experiment:   {experiment_dir.name}",
+            f"agent:        {agent_config.agent_id}",
+            f"timestamp:    {ts}",
+            f"best_commit:  {best_commit}",
+            f"best_val_bpb: {best_bpb}",
+            f"total_runs:   {len(rows)}",
+            "",
+            "All runs (chronological):",
+        ]
+        for row in rows:
+            lines.append(
+                f"  {row.get('commit','?')[:8]}  val_bpb={row.get('val_bpb','?'):>10}  "
+                f"{row.get('description','')}"
+            )
+        report_path.write_text("\n".join(lines) + "\n")
+        print(f"[orchestrator] Final report written to {report_path}")
 
     def _validate_gpu_assignments(self) -> None:
         devices = [a.cuda_device for a in self.config.agents]

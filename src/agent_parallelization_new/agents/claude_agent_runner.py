@@ -142,16 +142,33 @@ class ClaudeAgentRunner(AgentRunner):
 
                 if first_turn:
                     turn_msg = first_message
-                    turn_timeout = min(self.FIRST_TURN_TIMEOUT_SEC, int(budget.remaining_seconds()))
+                    turn_timeout = max(self.FIRST_TURN_TIMEOUT_SEC, int(budget.remaining_seconds()))
                     _log(log_fh, f"[{config.agent_id}] Turn {total_turns} starting (first turn).")
                 else:
                     mins_left = budget.remaining_minutes()
+                    secs_left = int(budget.remaining_seconds())
+                    # Expected wall time per run: train_budget + ~90s compile/eval overhead
+                    run_wall_sec = config.train_time_budget_seconds + 90
+                    run_wall_min = round(run_wall_sec / 60)
+                    if secs_left < run_wall_sec + 60:
+                        time_guidance = (
+                            f"WARNING: only ~{mins_left} min left — NOT ENOUGH for another "
+                            f"training run (~{run_wall_min} min each). "
+                            f"Do NOT start a new run. Instead review results.tsv, "
+                            f"ensure the best result is committed, and stop."
+                        )
+                    else:
+                        runs_remaining = secs_left // run_wall_sec
+                        time_guidance = (
+                            f"Each training run takes ~{run_wall_min} min. "
+                            f"You can fit approximately {runs_remaining} more run(s)."
+                        )
                     turn_msg = (
                         f"Continue the research. ~{mins_left} min remaining in budget. "
-                        f"Keep modifying train.py and running experiments to improve val_bpb. "
-                        f"Do NOT stop until time runs out."
+                        f"{time_guidance} "
+                        f"Keep modifying train.py and running experiments to improve val_bpb."
                     )
-                    turn_timeout = min(int(budget.remaining_seconds()), self.MAX_TURN_TIMEOUT_SEC)
+                    turn_timeout = min(secs_left, self.MAX_TURN_TIMEOUT_SEC)
                     _log(log_fh, f"[{config.agent_id}] Turn {total_turns} starting (~{mins_left} min remaining).")
 
                 turn_start = time.monotonic()
