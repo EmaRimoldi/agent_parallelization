@@ -327,6 +327,7 @@ class ClaudeAgentRunner(AgentRunner):
                     except OSError:
                         pass
                     log_fh.write(f"[{agent_id}] Training run #{run_count} done — {status}\n")
+                    _dump_slurm_failure_logs(ws, agent_id, run_count, log_fh)
                 log_fh.flush()
 
             stop_event.wait(2)
@@ -486,3 +487,47 @@ class ClaudeAgentRunner(AgentRunner):
 def _enforce_min_interval(elapsed: float, min_interval: float) -> None:
     if elapsed < min_interval:
         time.sleep(min_interval - elapsed)
+
+
+def _dump_slurm_failure_logs(
+    workspace: Path,
+    agent_id: str,
+    run_count: int,
+    log_fh,
+    tail_lines: int = 50,
+) -> None:
+    """Append SLURM training logs to the agent log on training failure.
+
+    Dumps (up to tail_lines each):
+    - workspace/logs/train_current.out  — stdout of the failing train.py run
+    - workspace/logs/worker_*.err       — stderr of the SLURM worker job
+    """
+    logs_dir = workspace / "logs"
+
+    train_out = logs_dir / "train_current.out"
+    if train_out.exists():
+        try:
+            lines = train_out.read_text().splitlines()
+            tail = lines[-tail_lines:]
+            log_fh.write(f"[{agent_id}] --- train_current.out (last {len(tail)} lines) ---\n")
+            for line in tail:
+                log_fh.write(f"[{agent_id}]   {line}\n")
+            log_fh.write(f"[{agent_id}] --- end train_current.out ---\n")
+        except OSError:
+            pass
+
+    try:
+        err_files = sorted(logs_dir.glob("worker_*.err"))
+        if err_files:
+            latest_err = err_files[-1]
+            lines = latest_err.read_text().splitlines()
+            if lines:
+                tail = lines[-tail_lines:]
+                log_fh.write(f"[{agent_id}] --- {latest_err.name} (last {len(tail)} lines) ---\n")
+                for line in tail:
+                    log_fh.write(f"[{agent_id}]   {line}\n")
+                log_fh.write(f"[{agent_id}] --- end {latest_err.name} ---\n")
+    except OSError:
+        pass
+
+    log_fh.flush()
