@@ -7,6 +7,7 @@ Setup is already complete:
 
 **Before the loop — read the in-scope files once for full context:**
 ```bash
+cat README.md    # repository context and project overview
 cat prepare.py   # fixed constants, tokenizer, dataloader, evaluation — do NOT modify
 cat train.py     # the file you modify: architecture, optimizer, hyperparameters, training loop
 ```
