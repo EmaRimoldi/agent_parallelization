@@ -1,4 +1,4 @@
-"""Git worktree creation and teardown for isolated agent workspaces."""
+"""Workspace creation and teardown for isolated agent workspaces."""
 
 from __future__ import annotations
 
@@ -39,11 +39,10 @@ def create_workspace(
     agent_time_budget_minutes: int = 60,
     experiment_mode: str = "parallel",
 ) -> Path:
-    """Create an isolated git worktree for one agent.
+    """Create an isolated git-backed workspace for one agent.
 
     Steps:
-    1. Create branch in autoresearch if not exists
-    2. Create git worktree at workspace_path
+    1. Create branch/workspace from autoresearch source
     3. Copy train.py.baseline
     4. Symlink .venv and data/
     5. Generate training scripts (SLURM: submit_training.sh + check_training.sh;
@@ -56,15 +55,23 @@ def create_workspace(
     workspace_path = workspace_path.resolve()
     results_root = results_root.resolve()
 
-    _ensure_branch(autoresearch_dir, branch_name)
-    _create_worktree(autoresearch_dir, workspace_path, branch_name)
-    _save_baseline(workspace_path)
-    _symlink_shared(autoresearch_dir, workspace_path)
-    _setup_shared_memory(workspace_path, results_root, experiment_mode)
-    _override_program_md(workspace_path)
+    if _is_git_repo_root(autoresearch_dir):
+        _ensure_branch(autoresearch_dir, branch_name)
+        _create_worktree(autoresearch_dir, workspace_path, branch_name)
+        _save_baseline(workspace_path)
+        _symlink_shared(autoresearch_dir, workspace_path)
+        _setup_shared_memory(workspace_path, results_root, experiment_mode)
+        _override_program_md(workspace_path)
+    else:
+        _create_local_workspace_copy(autoresearch_dir, workspace_path)
+        _override_program_md(workspace_path)
+        _initialize_workspace_repo(workspace_path, branch_name)
+        _save_baseline(workspace_path)
+        _symlink_shared(autoresearch_dir, workspace_path)
+        _setup_shared_memory(workspace_path, results_root, experiment_mode)
 
-    if use_slurm:
-        if persistent_worker:
+    if persistent_worker:
+        if use_slurm:
             # Convert agent budget to HH:MM:SS, adding 10-minute safety margin
             total_minutes = agent_time_budget_minutes + 10
             worker_time = f"{total_minutes // 60:02d}:{total_minutes % 60:02d}:00"
@@ -75,10 +82,29 @@ def create_workspace(
                 slurm_partition=slurm_partition,
                 slurm_gres=slurm_gres,
                 worker_time=worker_time,
+                use_slurm=True,
             )
-            generate_run_on_worker_sh(workspace_path, train_budget_seconds)
-            generate_stop_gpu_worker_sh(workspace_path)
+            generate_run_on_worker_sh(
+                workspace_path,
+                train_budget_seconds,
+                use_slurm=True,
+            )
+            generate_stop_gpu_worker_sh(workspace_path, use_slurm=True)
         else:
+            generate_start_gpu_worker_sh(
+                workspace_path,
+                agent_id=agent_id,
+                results_root=results_root,
+                use_slurm=False,
+            )
+            generate_run_on_worker_sh(
+                workspace_path,
+                train_budget_seconds,
+                use_slurm=False,
+            )
+            generate_stop_gpu_worker_sh(workspace_path, use_slurm=False)
+    else:
+        if use_slurm:
             # Legacy: one sbatch per train.py run
             generate_submit_training_sh(
                 workspace_path,
@@ -89,9 +115,9 @@ def create_workspace(
                 slurm_time=slurm_time,
             )
             generate_slurm_check_training_sh(workspace_path)
-    else:
-        generate_run_training_sh(workspace_path, train_budget_seconds)
-        generate_check_training_sh(workspace_path)
+        else:
+            generate_run_training_sh(workspace_path, train_budget_seconds)
+            generate_check_training_sh(workspace_path)
 
     # Generate snapshot helper scripts (save_snapshot.py, update_snapshot.py)
     generate_snapshot_helpers(
@@ -140,6 +166,16 @@ def _ensure_branch(autoresearch_dir: Path, branch_name: str) -> None:
         )
 
 
+def _is_git_repo_root(path: Path) -> bool:
+    result = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"],
+        cwd=path,
+        capture_output=True,
+        text=True,
+    )
+    return result.returncode == 0 and Path(result.stdout.strip()).resolve() == path.resolve()
+
+
 def _create_worktree(
     autoresearch_dir: Path, workspace_path: Path, branch_name: str
 ) -> None:
@@ -156,6 +192,51 @@ def _create_worktree(
         raise WorkspaceError(
             f"Failed to create worktree at {workspace_path}: {result.stderr}"
         )
+
+
+def _create_local_workspace_copy(autoresearch_dir: Path, workspace_path: Path) -> None:
+    if workspace_path.exists():
+        return
+    workspace_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(
+        autoresearch_dir,
+        workspace_path,
+        ignore=shutil.ignore_patterns(".git", "__pycache__", "data", ".venv"),
+        dirs_exist_ok=True,
+    )
+
+
+def _initialize_workspace_repo(workspace_path: Path, branch_name: str) -> None:
+    git_dir = workspace_path / ".git"
+    if git_dir.exists():
+        return
+
+    subprocess.run(["git", "init"], cwd=workspace_path, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "config", "user.name", "AutoResearch Agent"],
+        cwd=workspace_path,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.email", "autoresearch-agent@example.com"],
+        cwd=workspace_path,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "checkout", "-b", branch_name],
+        cwd=workspace_path,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(["git", "add", "."], cwd=workspace_path, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "Initial workspace baseline"],
+        cwd=workspace_path,
+        check=True,
+        capture_output=True,
+    )
 
 
 def _override_program_md(workspace_path: Path) -> None:

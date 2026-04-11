@@ -250,6 +250,7 @@ class Orchestrator:
             slurm_partition=self.config.slurm_partition,
             slurm_gres=self.config.slurm_gres,
             slurm_time=self.config.slurm_time,
+            use_slurm=self.config.slurm_enabled,
             agent_time_budget_minutes=agent_config.time_budget_minutes,
             experiment_mode=self.config.mode,
         )

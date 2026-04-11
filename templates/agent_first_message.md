@@ -8,7 +8,7 @@ Setup is already complete:
 **Before the loop — read the in-scope files once for full context:**
 ```bash
 cat README.md    # repository context and project overview
-cat prepare.py   # fixed constants, tokenizer, dataloader, evaluation — do NOT modify
+cat prepare.py   # fixed constants, data loading, evaluation — do NOT modify
 cat train.py     # the file you modify: architecture, optimizer, hyperparameters, training loop
 ```
 Then initialize `results/results.tsv` with just the header row and start experimenting.
@@ -25,7 +25,7 @@ WORKFLOW — follow this exactly:
 WORKER_JOB_ID=$(bash start_gpu_worker.sh)
 echo "Worker: $WORKER_JOB_ID"
 ```
-This allocates a dedicated GPU for your entire session. Do it once and keep $WORKER_JOB_ID.
+This allocates a dedicated {{COMPUTE_DEVICE}} for your entire session. Do it once and keep $WORKER_JOB_ID.
 
 **Each iteration:**
 1. Edit `train.py` (one scalar hyperparameter change)

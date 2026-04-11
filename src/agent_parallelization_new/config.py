@@ -53,6 +53,7 @@ class ExperimentConfig:
     agents: list[AgentConfig] = field(default_factory=list)
     repo_root: str = ""
     # SLURM settings (threaded through to create_workspace)
+    slurm_enabled: bool = True
     slurm_partition: str = "pi_tpoggio"
     slurm_gres: str = "gpu:1"
     slurm_time: str = "00:10:00"
@@ -261,6 +262,7 @@ class ExperimentConfig:
             train_time_budget_seconds=train_s,
             repo_root=repo_root,
             agents=agent_list,
+            slurm_enabled=bool(slurm.get("enabled", True)),
             slurm_partition=slurm.get("partition", "pi_tpoggio"),
             slurm_gres=slurm.get("gres", "gpu:1"),
             slurm_time=slurm.get("time", "00:10:00"),

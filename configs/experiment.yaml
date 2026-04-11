@@ -67,6 +67,8 @@ agents:
 
 # ── SLURM settings ────────────────────────────────────────────────
 slurm:
+  # Enable SLURM-backed workers. Set false for local CPU-only runs.
+  enabled: true
   # SLURM partition name.
   partition: pi_tpoggio
   # GPU resource string passed to --gres.

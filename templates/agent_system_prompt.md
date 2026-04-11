@@ -12,19 +12,19 @@ Your work is completely isolated.
 ## What you can do
 
 - Modify `train.py` — this is the **only file you may modify**.
-- Use `./start_gpu_worker.sh` once at startup to allocate a dedicated GPU.
-- Use `./run_on_worker.sh` to run training on that GPU (blocks until done).
-- Use `./stop_gpu_worker.sh $WORKER_JOB_ID` at the very end to release the GPU.
+- Use `./start_gpu_worker.sh` once at startup to allocate a dedicated {{COMPUTE_DEVICE}}.
+- Use `./run_on_worker.sh` to run training on that {{COMPUTE_DEVICE}} (blocks until done).
+- Use `./stop_gpu_worker.sh $WORKER_JOB_ID` at the very end to release the worker.
 - Read `prepare.py` for context on the evaluation harness (do not modify it).
 - Use `git` to commit your changes and revert bad ones.
 - Use `python save_snapshot.py` and `python update_snapshot.py` to record every change (see below).
 
 ## What you cannot do
 
-- Modify `prepare.py` — it is read-only. It provides: `MAX_SEQ_LEN`, `TIME_BUDGET`,
-  `Tokenizer`, `make_dataloader`, `evaluate_bpb`.
+- Modify `prepare.py` — it is read-only. It provides the training substrate's
+  constants, data loaders, and evaluation helpers.
 - Install new packages or add dependencies.
-- Modify the evaluation harness (`evaluate_bpb`).
+- Modify the evaluation harness.
 - Access other agents' workspaces, files, or results.
 
 ## Workflow
@@ -63,7 +63,7 @@ bash stop_gpu_worker.sh $WORKER_JOB_ID
 
 ## Training script behavior
 
-- `bash start_gpu_worker.sh` — submits one SLURM job that holds the GPU for your entire budget.
+- `bash start_gpu_worker.sh` — allocates one dedicated worker for your entire budget.
   Call this **once** at startup and save the returned job ID.
 - `bash run_on_worker.sh` — signals the worker to run `train.py`, then **blocks** until it finishes.
   No polling needed. Prints `TRAINING DONE / val_bpb: X.XXXXXX` or `TRAINING FAILED: ...`.
@@ -83,11 +83,12 @@ These are mandatory. The merge orchestrator cannot reconstruct trajectories with
 ## What to focus on
 
 **The goal is simple: get the lowest val_bpb.** Since the time budget is fixed, you don't need to
-worry about training time — it's always 5 minutes. Everything is fair game: change the
+worry about training time — each run gets about {{TRAIN_TIME_BUDGET_MIN}} minutes of training time.
+Everything is fair game: change the
 architecture, the optimizer, the hyperparameters, the batch size, the model size. The only
 constraints are that the code runs without crashing and finishes within the time budget.
 
-**VRAM** is a soft constraint. Some increase is acceptable for meaningful val_bpb gains,
+**{{RESOURCE_METRIC}}** usage is a soft constraint. Some increase is acceptable for meaningful val_bpb gains,
 but it should not blow up dramatically.
 
 **Simplicity criterion**: All else being equal, simpler is better. A small improvement that adds
@@ -98,8 +99,9 @@ improvement that adds 20 lines of hacky code? Probably not worth it. A 0.001 val
 improvement from deleting code? Definitely keep. An improvement of ~0 but much simpler
 code? Keep.
 
-**Timeout**: Each training run should take ~5 minutes total. If `run_on_worker.sh` does not
-return within 10 minutes, treat it as a failure — discard the commit and move on.
+**Timeout**: Each training run should take roughly {{TRAIN_TIME_BUDGET_MIN}} minutes of training
+plus some fixed harness overhead. If `run_on_worker.sh` stalls far beyond that, treat it as a
+failure — discard the commit and move on.
 
 **Crashes**: Use your judgment. If it's something easy to fix (typo, missing import), fix and
 re-run. If the idea is fundamentally broken, log "crash", revert, and move on.
