@@ -11,6 +11,7 @@ venv/
 # Runs and experiment outputs
 runs/
 results/
+autoresearch/data/
 
 # Jupyter
 .ipynb_checkpoints/
