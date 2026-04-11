@@ -103,7 +103,7 @@ class Orchestrator:
     ) -> None:
         """Launch all agents simultaneously. Block until all finish or budgets expire."""
         self._validate_gpu_assignments()
-        mode_dir = experiment_dir / "mode_parallel"
+        mode_dir = experiment_dir / f"mode_{self.config.mode}"
         run_id = self.config.experiment_id
 
         # Write experiment manifest
@@ -251,6 +251,7 @@ class Orchestrator:
             slurm_gres=self.config.slurm_gres,
             slurm_time=self.config.slurm_time,
             agent_time_budget_minutes=agent_config.time_budget_minutes,
+            experiment_mode=self.config.mode,
         )
         (agent_dir / "logs").mkdir(parents=True, exist_ok=True)
         return agent_dir, workspace

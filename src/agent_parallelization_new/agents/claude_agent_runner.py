@@ -13,6 +13,7 @@ import subprocess
 import sys
 import threading
 import time
+import fcntl
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -176,7 +177,11 @@ class ClaudeAgentRunner(AgentRunner):
                         f"{time_guidance} "
                         f"Keep modifying train.py and running experiments to improve val_bpb."
                     )
-                    if self.config.use_external_memory:
+                    if self.config.use_shared_memory:
+                        memory = self._build_shared_memory_context()
+                        if memory:
+                            turn_msg = f"{memory}\n\n---\n\n{turn_msg}"
+                    elif self.config.use_external_memory:
                         memory = self._build_memory_context()
                         if memory:
                             turn_msg = f"{memory}\n\n---\n\n{turn_msg}"
@@ -323,6 +328,7 @@ class ClaudeAgentRunner(AgentRunner):
         train_out = ws / "logs" / "train_current.out"
         train_py = ws / "train.py"
         results_tsv = ws / "results" / "results.tsv"
+        trace_path = self.agent_dir / "reasoning" / "trace.jsonl"
 
         trigger_seen = False
         result_seen = False
@@ -331,6 +337,7 @@ class ClaudeAgentRunner(AgentRunner):
         train_py_mtime: Optional[float] = None
         results_tsv_lines = 0
         train_out_lines = 0
+        shared_logged_steps: set[int] = set()
 
         while not stop_event.is_set():
             # train.py modified → log diff vs baseline so we see what changed
@@ -343,6 +350,29 @@ class ClaudeAgentRunner(AgentRunner):
                     train_py_mtime = mtime
             except OSError:
                 pass
+
+            if self.config.use_shared_memory and trace_path.exists():
+                try:
+                    for raw_line in trace_path.read_text().splitlines():
+                        if not raw_line.strip():
+                            continue
+                        entry = json.loads(raw_line)
+                        step = entry.get("step_index")
+                        if not isinstance(step, int) or step in shared_logged_steps:
+                            continue
+                        accepted = entry.get("accepted")
+                        val_bpb = entry.get("val_bpb_after")
+                        if accepted is None and val_bpb is None:
+                            continue
+                        self._append_shared_log(
+                            step=step,
+                            hypothesis=str(entry.get("hypothesis", "")),
+                            val_bpb=val_bpb,
+                            accepted=bool(accepted),
+                        )
+                        shared_logged_steps.add(step)
+                except (OSError, json.JSONDecodeError, TypeError, ValueError):
+                    pass
 
             # results.tsv new row → agent logged a result
             try:
@@ -584,6 +614,58 @@ class ClaudeAgentRunner(AgentRunner):
                 continue
 
         return "\n".join(lines) if len(lines) > 3 else ""
+
+    def _build_shared_memory_context(self) -> str:
+        """Build a compact experiment log across all agents."""
+        shared_path = self.workspace / "shared_results_log.jsonl"
+        if not shared_path.exists():
+            return ""
+
+        lines = [
+            "# Shared Experiment Log (all agents)",
+            "| agent | # | change | bpb | kept |",
+            "|-------|---|--------|-----|------|",
+        ]
+
+        for raw_line in shared_path.read_text().splitlines():
+            if not raw_line.strip():
+                continue
+            try:
+                entry = json.loads(raw_line)
+                agent = str(entry.get("agent_id", "?"))[-4:]
+                step = entry.get("step", "?")
+                hypothesis = str(entry.get("hypothesis", "?"))[:35]
+                bpb = entry.get("val_bpb")
+                accepted = "✓" if entry.get("accepted") else "✗"
+                if bpb is not None:
+                    lines.append(
+                        f"| {agent} | {step} | {hypothesis} | {float(bpb):.4f} | {accepted} |"
+                    )
+            except (json.JSONDecodeError, TypeError, ValueError):
+                continue
+
+        return "\n".join(lines) if len(lines) > 3 else ""
+
+    def _append_shared_log(self, step, hypothesis, val_bpb, accepted) -> None:
+        """Append one completed experiment result to the shared JSONL log."""
+        shared_path = self.workspace / "shared_results_log.jsonl"
+        if not shared_path.exists():
+            return
+
+        record = json.dumps(
+            {
+                "agent_id": self.config.agent_id,
+                "step": step,
+                "hypothesis": str(hypothesis)[:60],
+                "val_bpb": val_bpb,
+                "accepted": accepted,
+                "timestamp": time.time(),
+            }
+        )
+        with open(shared_path, "a") as shared_fh:
+            fcntl.flock(shared_fh, fcntl.LOCK_EX)
+            shared_fh.write(record + "\n")
+            fcntl.flock(shared_fh, fcntl.LOCK_UN)
 
     def _build_env(self, run_id: str, experiment_id: str) -> dict:
         env = os.environ.copy()

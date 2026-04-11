@@ -19,6 +19,7 @@ class AgentConfig:
     model: str = "claude-sonnet-4-6"
     temperature: Optional[float] = None
     use_external_memory: bool = False
+    use_shared_memory: bool = False
     system_prompt_file: str = "templates/agent_system_prompt.md"
     first_message_file: str = "templates/agent_first_message.md"
 
@@ -199,6 +200,7 @@ class ExperimentConfig:
         model    = ag.get("model", "claude-haiku-4-5-20251001")
         temp     = ag.get("temperature", None)
         use_external_memory = bool(ag.get("use_external_memory", False))
+        use_shared_memory = bool(ag.get("use_shared_memory", False))
         devices  = ag.get("cuda_devices", None)
         overrides: dict[str, dict] = {
             o["agent_id"]: o for o in ag.get("overrides", []) if "agent_id" in o
@@ -227,6 +229,9 @@ class ExperimentConfig:
                             use_external_memory or mode == "single_memory",
                         )
                     ),
+                    use_shared_memory=bool(
+                        single_agent_overrides.get("use_shared_memory", use_shared_memory)
+                    ),
                 )
             ]
         else:
@@ -243,6 +248,9 @@ class ExperimentConfig:
                     temperature=ov.get("temperature", temp),
                     use_external_memory=bool(
                         ov.get("use_external_memory", use_external_memory)
+                    ),
+                    use_shared_memory=bool(
+                        ov.get("use_shared_memory", use_shared_memory)
                     ),
                 ))
 

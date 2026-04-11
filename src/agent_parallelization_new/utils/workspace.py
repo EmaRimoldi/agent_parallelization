@@ -37,6 +37,7 @@ def create_workspace(
     use_slurm: bool = True,
     persistent_worker: bool = True,
     agent_time_budget_minutes: int = 60,
+    experiment_mode: str = "parallel",
 ) -> Path:
     """Create an isolated git worktree for one agent.
 
@@ -59,6 +60,7 @@ def create_workspace(
     _create_worktree(autoresearch_dir, workspace_path, branch_name)
     _save_baseline(workspace_path)
     _symlink_shared(autoresearch_dir, workspace_path)
+    _setup_shared_memory(workspace_path, results_root, experiment_mode)
     _override_program_md(workspace_path)
 
     if use_slurm:
@@ -196,3 +198,21 @@ def _symlink_shared(autoresearch_dir: Path, workspace_path: Path) -> None:
     data_dst = workspace_path / "data"
     if data_src.exists() and not data_dst.exists():
         data_dst.symlink_to(data_src)
+
+
+def _setup_shared_memory(
+    workspace_path: Path,
+    results_root: Path,
+    experiment_mode: str,
+) -> None:
+    if experiment_mode != "parallel_shared":
+        return
+
+    experiment_dir = results_root.parents[2]
+    shared_log_path = experiment_dir / "shared_results_log.jsonl"
+    shared_log_path.touch(exist_ok=True)
+
+    workspace_shared_path = workspace_path / "shared_results_log.jsonl"
+    if workspace_shared_path.exists() or workspace_shared_path.is_symlink():
+        workspace_shared_path.unlink()
+    workspace_shared_path.symlink_to(shared_log_path)
