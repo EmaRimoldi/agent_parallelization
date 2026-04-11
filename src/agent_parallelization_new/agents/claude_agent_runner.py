@@ -104,7 +104,11 @@ class ClaudeAgentRunner(AgentRunner):
         session_log = self.logs_dir / "run_agent.log"
 
         start_time = datetime.now(timezone.utc).isoformat()
-        total_turns = 0
+        self.turn_count = 0
+        self.turns_log_path = self.results_dir / "turns.jsonl"
+        self.turns_log_path.write_text("")
+        self._cumulative_chars = 0
+        self._turn_records: list[dict] = []
         backoff = self.INITIAL_BACKOFF_SEC
         noreply_count = 0
         first_turn = True
@@ -143,7 +147,7 @@ class ClaudeAgentRunner(AgentRunner):
                 if first_turn:
                     turn_msg = first_message
                     turn_timeout = max(self.FIRST_TURN_TIMEOUT_SEC, int(budget.remaining_seconds()))
-                    _log(log_fh, f"[{config.agent_id}] Turn {total_turns} starting (first turn).")
+                    _log(log_fh, f"[{config.agent_id}] Turn {self.turn_count} starting (first turn).")
                 else:
                     mins_left = budget.remaining_minutes()
                     secs_left = int(budget.remaining_seconds())
@@ -169,7 +173,7 @@ class ClaudeAgentRunner(AgentRunner):
                         f"Keep modifying train.py and running experiments to improve val_bpb."
                     )
                     turn_timeout = min(secs_left, self.MAX_TURN_TIMEOUT_SEC)
-                    _log(log_fh, f"[{config.agent_id}] Turn {total_turns} starting (~{mins_left} min remaining).")
+                    _log(log_fh, f"[{config.agent_id}] Turn {self.turn_count} starting (~{mins_left} min remaining).")
 
                 turn_start = time.monotonic()
 
@@ -177,7 +181,7 @@ class ClaudeAgentRunner(AgentRunner):
                 _turn_done = threading.Event()
                 threading.Thread(
                     target=self._heartbeat,
-                    args=(config.agent_id, total_turns, turn_start, _turn_done, log_fh),
+                    args=(config.agent_id, self.turn_count, turn_start, _turn_done, log_fh),
                     daemon=True,
                 ).start()
 
@@ -192,8 +196,37 @@ class ClaudeAgentRunner(AgentRunner):
                 _turn_done.set()
                 turn_elapsed = time.monotonic() - turn_start
 
+                system_prompt_chars = len(effective_system_prompt) if effective_system_prompt else 0
+                turn_msg_chars = len(turn_msg)
+                response_chars = len(output)
+
+                input_tokens = _coerce_token_count(usage.get("input_tokens"))
+                if input_tokens is None:
+                    input_tokens = (system_prompt_chars + turn_msg_chars) // 4
+
+                output_tokens = _coerce_token_count(usage.get("output_tokens"))
+                if output_tokens is None:
+                    output_tokens = response_chars // 4
+
+                self._cumulative_chars += system_prompt_chars + turn_msg_chars + response_chars
+                turn_record = {
+                    "turn": self.turn_count,
+                    "timestamp": time.time(),
+                    "model": self.config.model,
+                    "input_tokens": input_tokens,
+                    "output_tokens": output_tokens,
+                    "system_prompt_chars": system_prompt_chars,
+                    "turn_msg_chars": turn_msg_chars,
+                    "response_chars": response_chars,
+                    "context_fill_ratio": self._estimate_context_fill(),
+                    "wall_clock_seconds": turn_elapsed,
+                }
+                self._turn_records.append(turn_record)
+                with open(self.turns_log_path, "a") as turns_fh:
+                    turns_fh.write(json.dumps(turn_record) + "\n")
+
                 _log(log_fh,
-                    f"[{config.agent_id}] Turn {total_turns} finished: exit={exit_code} elapsed={turn_elapsed:.1f}s")
+                    f"[{config.agent_id}] Turn {self.turn_count} finished: exit={exit_code} elapsed={turn_elapsed:.1f}s")
                 if output:
                     log_fh.write(output[:2000] + ("\n...(truncated)\n" if len(output) > 2000 else "\n"))
                     log_fh.flush()
@@ -222,7 +255,7 @@ class ClaudeAgentRunner(AgentRunner):
                 else:
                     backoff = self.INITIAL_BACKOFF_SEC
                     noreply_count = 0
-                    total_turns += 1
+                    self.turn_count += 1
 
                     if not budget.budget_started():
                         budget.start_budget_clock()
@@ -240,7 +273,7 @@ class ClaudeAgentRunner(AgentRunner):
             experiment_id=experiment_id,
             start_time=start_time,
             end_time=end_time,
-            total_turns=total_turns,
+            total_turns=self.turn_count,
             budget_seconds=config.time_budget_minutes * 60,
             observed_val_bpbs=_observed_val_bpbs,
         )
@@ -472,6 +505,11 @@ class ClaudeAgentRunner(AgentRunner):
     # Helpers
     # ------------------------------------------------------------------
 
+    def _estimate_context_fill(self) -> float:
+        """Estimate context fill ratio c/K from cumulative character count."""
+        estimated_tokens = self._cumulative_chars / 4
+        return min(estimated_tokens / 200_000, 1.0)
+
     def _build_env(self, run_id: str, experiment_id: str) -> dict:
         env = os.environ.copy()
         env["RUN_ID"] = run_id
@@ -506,6 +544,23 @@ class ClaudeAgentRunner(AgentRunner):
             "total_turns": total_turns,
             "budget_seconds": budget_seconds,
             "model": self.config.model,
+            "total_input_tokens": sum(
+                record.get("input_tokens") or 0 for record in getattr(self, "_turn_records", [])
+            ),
+            "total_output_tokens": sum(
+                record.get("output_tokens") or 0 for record in getattr(self, "_turn_records", [])
+            ),
+            "avg_context_fill": (
+                sum(record.get("context_fill_ratio", 0.0) for record in getattr(self, "_turn_records", []))
+                / len(getattr(self, "_turn_records", []))
+                if getattr(self, "_turn_records", [])
+                else 0.0
+            ),
+            "final_context_fill": (
+                getattr(self, "_turn_records", [])[-1].get("context_fill_ratio", 0.0)
+                if getattr(self, "_turn_records", [])
+                else 0.0
+            ),
         }
         meta_path = self.results_dir / "metadata.json"
         meta_path.write_text(json.dumps(metadata, indent=2))
@@ -544,6 +599,15 @@ class ClaudeAgentRunner(AgentRunner):
 def _enforce_min_interval(elapsed: float, min_interval: float) -> None:
     if elapsed < min_interval:
         time.sleep(min_interval - elapsed)
+
+
+def _coerce_token_count(value) -> Optional[int]:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _log_train_diff(train_py: Path, log_fh, agent_id: str, max_lines: int = 40) -> None:
