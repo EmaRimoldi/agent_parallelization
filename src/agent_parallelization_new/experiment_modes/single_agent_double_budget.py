@@ -24,7 +24,9 @@ def run_single_long_experiment(
     Direct comparison condition against Mode 1 (parallel_two_agents).
     Both modes consume the same total compute budget.
     """
-    assert config.mode == "single_long", f"Expected mode=single_long, got {config.mode}"
+    assert config.mode in {"single_long", "single_memory"}, (
+        f"Expected mode=single_long or single_memory, got {config.mode}"
+    )
     assert len(config.agents) == 1, f"Single-long mode expects 1 agent, got {len(config.agents)}"
 
     orchestrator = Orchestrator(config=config, repo_root=repo_root)
@@ -38,11 +40,11 @@ def run_single_long_experiment(
     summary = collect_experiment(
         experiment_dir=experiment_dir,
         experiment_id=config.experiment_id,
-        mode="single_long",
+        mode=config.mode,
         agent_ids=agent_ids,
     )
 
-    mode_dir = experiment_dir / "mode_single_long"
+    mode_dir = experiment_dir / f"mode_{config.mode}"
     write_experiment_report(summary, mode_dir)
 
     return summary

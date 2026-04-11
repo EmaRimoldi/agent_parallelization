@@ -18,6 +18,7 @@ class AgentConfig:
     cuda_device: str = "0"
     model: str = "claude-sonnet-4-6"
     temperature: Optional[float] = None
+    use_external_memory: bool = False
     system_prompt_file: str = "templates/agent_system_prompt.md"
     first_message_file: str = "templates/agent_first_message.md"
 
@@ -160,6 +161,24 @@ class ExperimentConfig:
         )
 
     @classmethod
+    def make_single_memory(
+        cls,
+        experiment_id: str,
+        time_budget_minutes: int,
+        train_time_budget_seconds: int,
+        repo_root: str,
+    ) -> "ExperimentConfig":
+        config = cls.make_single_long(
+            experiment_id=experiment_id,
+            time_budget_minutes=time_budget_minutes,
+            train_time_budget_seconds=train_time_budget_seconds,
+            repo_root=repo_root,
+        )
+        config.mode = "single_memory"
+        config.agents[0].use_external_memory = True
+        return config
+
+    @classmethod
     def from_yaml(cls, path: Path, repo_root: str = "") -> "ExperimentConfig":
         """Load ExperimentConfig from an experiment.yaml file.
 
@@ -179,6 +198,7 @@ class ExperimentConfig:
         n_agents = int(ag.get("n", 2))
         model    = ag.get("model", "claude-haiku-4-5-20251001")
         temp     = ag.get("temperature", None)
+        use_external_memory = bool(ag.get("use_external_memory", False))
         devices  = ag.get("cuda_devices", None)
         overrides: dict[str, dict] = {
             o["agent_id"]: o for o in ag.get("overrides", []) if "agent_id" in o
@@ -191,15 +211,22 @@ class ExperimentConfig:
         experiment_id = exp.get("id") or f"exp_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
         # Build per-agent configs, applying any overrides
-        if mode == "single_long":
+        if mode in {"single_long", "single_memory"}:
+            single_agent_overrides = overrides.get("agent_0", {})
             agent_list = [
                 AgentConfig(
                     agent_id="agent_0",
                     time_budget_minutes=budget * 2,
                     train_time_budget_seconds=train_s,
                     cuda_device=devices[0],
-                    model=model,
-                    temperature=temp,
+                    model=single_agent_overrides.get("model", model),
+                    temperature=single_agent_overrides.get("temperature", temp),
+                    use_external_memory=bool(
+                        single_agent_overrides.get(
+                            "use_external_memory",
+                            use_external_memory or mode == "single_memory",
+                        )
+                    ),
                 )
             ]
         else:
@@ -214,6 +241,9 @@ class ExperimentConfig:
                     cuda_device=str(ov.get("cuda_device", devices[i])),
                     model=ov.get("model", model),
                     temperature=ov.get("temperature", temp),
+                    use_external_memory=bool(
+                        ov.get("use_external_memory", use_external_memory)
+                    ),
                 ))
 
         return cls(

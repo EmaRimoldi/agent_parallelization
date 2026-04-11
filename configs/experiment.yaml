@@ -6,9 +6,10 @@
 experiment:
   # Unique identifier for this run. null = auto-generate timestamp-based ID.
   id: null
-  # Execution mode: parallel | single_long
+  # Execution mode: parallel | single_long | single_memory
   #   parallel    — N independent agents running simultaneously
   #   single_long — 1 agent with 2× the time budget
+  #   single_memory — 1 agent with 2× the time budget and external memory
   mode: parallel
   # Directory under which run outputs are written (relative to repo root).
   runs_dir: runs
@@ -37,6 +38,9 @@ agents:
   #   0.5 .. 0.99  → no directive
   #   < 0.5        → conservative: small incremental changes
   temperature: null
+
+  # Inject a compact reasoning-trace table on each non-initial turn.
+  use_external_memory: false
 
   # CUDA device assignment. null = auto-assign [0, 1, …, n-1].
   # Provide an explicit list to pin agents to specific devices.

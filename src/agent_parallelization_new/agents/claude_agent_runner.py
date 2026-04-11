@@ -176,6 +176,10 @@ class ClaudeAgentRunner(AgentRunner):
                         f"{time_guidance} "
                         f"Keep modifying train.py and running experiments to improve val_bpb."
                     )
+                    if self.config.use_external_memory:
+                        memory = self._build_memory_context()
+                        if memory:
+                            turn_msg = f"{memory}\n\n---\n\n{turn_msg}"
                     turn_timeout = min(secs_left, self.MAX_TURN_TIMEOUT_SEC)
                     _log(log_fh, f"[{config.agent_id}] Turn {self.turn_count} starting (~{mins_left} min remaining).")
 
@@ -539,6 +543,47 @@ class ClaudeAgentRunner(AgentRunner):
         """Estimate context fill ratio c/K from cumulative character count."""
         estimated_tokens = self._cumulative_chars / 4
         return min(estimated_tokens / 200_000, 1.0)
+
+    def _build_memory_context(self) -> str:
+        """Build a compact experiment log from the agent's private trace."""
+        trace_path = self.agent_dir / "reasoning" / "trace.jsonl"
+        if not trace_path.exists():
+            return ""
+
+        lines = [
+            "# Experiment Log",
+            "| # | change | bpb | Δ | best |",
+            "|---|--------|-----|---|------|",
+        ]
+        best_bpb = float("inf")
+
+        for raw_line in trace_path.read_text().splitlines():
+            if not raw_line.strip():
+                continue
+            try:
+                entry = json.loads(raw_line)
+                step = entry.get("step_index", entry.get("step", "?"))
+                hypothesis = str(entry.get("hypothesis", "?"))[:40]
+                bpb = entry.get("val_bpb_after")
+                if bpb is None:
+                    continue
+                bpb_val = float(bpb)
+                prev = entry.get("val_bpb_before")
+                delta = (
+                    f"{bpb_val - float(prev):+.4f}"
+                    if prev not in (None, "")
+                    else "—"
+                )
+                is_best = "✓" if bpb_val < best_bpb else ""
+                if bpb_val < best_bpb:
+                    best_bpb = bpb_val
+                lines.append(
+                    f"| {step} | {hypothesis} | {bpb_val:.4f} | {delta} | {is_best} |"
+                )
+            except (json.JSONDecodeError, TypeError, ValueError):
+                continue
+
+        return "\n".join(lines) if len(lines) > 3 else ""
 
     def _build_env(self, run_id: str, experiment_id: str) -> dict:
         env = os.environ.copy()

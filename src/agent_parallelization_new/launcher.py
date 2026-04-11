@@ -9,6 +9,7 @@ from pathlib import Path
 
 from agent_parallelization_new.config import ExperimentConfig
 from agent_parallelization_new.experiment_modes.parallel_two_agents import run_parallel_experiment
+from agent_parallelization_new.experiment_modes.single_agent_memory import run_single_agent_memory
 from agent_parallelization_new.experiment_modes.single_agent_double_budget import run_single_long_experiment
 from agent_parallelization_new.outputs.reporter import write_final_comparison
 
@@ -126,3 +127,49 @@ def main_single_long(argv=None) -> None:
         first_message_template=first_message_tmpl,
     )
     print(f"[launcher] Single-long experiment complete. Results: {experiment_dir}")
+
+
+def main_single_memory(argv=None) -> None:
+    parser = argparse.ArgumentParser(description="Run single-agent experiment with external memory")
+    parser.add_argument("--config", type=str, default=None,
+                        help="Path to experiment.yaml. If provided, all other flags are ignored.")
+    parser.add_argument("--time-budget", type=int, default=30, help="Base budget T (minutes); agent gets 2T")
+    parser.add_argument("--train-budget", type=int, default=300, help="Budget per training run (seconds)")
+    parser.add_argument("--experiment-id", type=str, default=None)
+    parser.add_argument("--runs-dir", type=str, default="runs")
+    args = parser.parse_args(argv)
+
+    repo_root = _repo_root()
+
+    if args.config:
+        config = ExperimentConfig.from_yaml(Path(args.config), repo_root=str(repo_root))
+    else:
+        experiment_id = args.experiment_id or _make_experiment_id("single_memory")
+        config = ExperimentConfig.make_single_memory(
+            experiment_id=experiment_id,
+            time_budget_minutes=args.time_budget,
+            train_time_budget_seconds=args.train_budget,
+            repo_root=str(repo_root),
+        )
+
+    runs_dir = repo_root / (args.runs_dir if not args.config else "runs")
+    experiment_dir = runs_dir / f"experiment_{config.experiment_id}"
+    experiment_dir.mkdir(parents=True, exist_ok=True)
+
+    system_prompt = _load_template(repo_root / config.system_prompt_file)
+    first_message_tmpl = _render_first_message(
+        _load_template(repo_root / config.first_message_file),
+        config.train_time_budget_seconds,
+    )
+
+    print(f"[launcher] Starting single-memory experiment: {config.experiment_id}")
+    print(f"[launcher] Output directory: {experiment_dir}")
+
+    run_single_agent_memory(
+        config=config,
+        experiment_dir=experiment_dir,
+        repo_root=repo_root,
+        system_prompt=system_prompt,
+        first_message_template=first_message_tmpl,
+    )
+    print(f"[launcher] Single-memory experiment complete. Results: {experiment_dir}")

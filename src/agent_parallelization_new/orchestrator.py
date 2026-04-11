@@ -158,7 +158,7 @@ class Orchestrator:
         first_message_template: str,
     ) -> None:
         """Launch one agent with double budget."""
-        mode_dir = experiment_dir / "mode_single_long"
+        mode_dir = experiment_dir / f"mode_{self.config.mode}"
         run_id = self.config.experiment_id
 
         manifest_path = experiment_dir / "config.json"
@@ -194,7 +194,7 @@ class Orchestrator:
         print(f"[orchestrator] Launched single agent {agent_config.agent_id}.")
         self._wait_for_all([proc], [hard_deadline])
         print("[orchestrator] Single agent finished.")
-        self._finalize_single_long(experiment_dir, agent_config)
+        self._finalize_single_mode(experiment_dir, agent_config)
 
     def run_merge(
         self,
@@ -255,10 +255,10 @@ class Orchestrator:
         (agent_dir / "logs").mkdir(parents=True, exist_ok=True)
         return agent_dir, workspace
 
-    def _finalize_single_long(
+    def _finalize_single_mode(
         self, experiment_dir: Path, agent_config: AgentConfig
     ) -> None:
-        """Post-run finalization for single_long mode.
+        """Post-run finalization for single-agent modes.
 
         Reads results/results.tsv from the agent workspace, identifies the
         best val_bpb commit, checks it out in the workspace, and writes a
@@ -268,12 +268,12 @@ class Orchestrator:
         import csv
         import subprocess as _sp
 
-        agent_dir = experiment_dir / "mode_single_long" / agent_config.agent_id
+        agent_dir = experiment_dir / f"mode_{self.config.mode}" / agent_config.agent_id
         workspace = agent_dir / "workspace"
         results_tsv = workspace / "results" / "results.tsv"
         report_path = agent_dir / "final_report.txt"
 
-        print("[orchestrator] Running single_long finalization...")
+        print(f"[orchestrator] Running {self.config.mode} finalization...")
 
         if not results_tsv.exists():
             print("[orchestrator] No results.tsv found — skipping finalization.")
@@ -320,7 +320,7 @@ class Orchestrator:
         # Write final report
         ts = datetime.now(timezone.utc).isoformat()
         lines = [
-            f"single_long finalization report",
+            f"{self.config.mode} finalization report",
             f"experiment:   {experiment_dir.name}",
             f"agent:        {agent_config.agent_id}",
             f"timestamp:    {ts}",

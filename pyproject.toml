@@ -15,6 +15,7 @@ dependencies = [
 [project.scripts]
 run-parallel = "agent_parallelization_new.launcher:main_parallel"
 run-single-long = "agent_parallelization_new.launcher:main_single_long"
+run-single-memory = "agent_parallelization_new.launcher:main_single_memory"
 
 [build-system]
 requires = ["hatchling"]
