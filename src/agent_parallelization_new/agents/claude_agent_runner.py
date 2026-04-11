@@ -18,6 +18,8 @@ from pathlib import Path
 from typing import Optional
 
 from agent_parallelization_new.agents.base import AgentRunner
+from agent_parallelization_new.budgeting import BudgetTracker
+from agent_parallelization_new.config import AgentConfig
 
 
 def _ts() -> str:
@@ -29,8 +31,6 @@ def _log(log_fh, msg: str) -> None:
     """Write a timestamped system-event line and flush."""
     log_fh.write(f"[{_ts()}] {msg}\n")
     log_fh.flush()
-from agent_parallelization_new.budgeting import BudgetTracker
-from agent_parallelization_new.config import AgentConfig
 
 
 class ClaudeAgentRunner(AgentRunner):
@@ -181,7 +181,7 @@ class ClaudeAgentRunner(AgentRunner):
                     daemon=True,
                 ).start()
 
-                exit_code, output = self._run_turn(
+                exit_code, output, usage = self._run_turn(
                     turn_msg=turn_msg,
                     session_id=session_id,
                     system_prompt=effective_system_prompt,
@@ -389,6 +389,20 @@ class ClaudeAgentRunner(AgentRunner):
     # Core turn execution
     # ------------------------------------------------------------------
 
+    def _parse_claude_output(self, raw_stdout: str) -> tuple[str, dict]:
+        """Parse JSON output from claude CLI. Returns (text_response, usage_dict)."""
+        try:
+            data = json.loads(raw_stdout)
+        except json.JSONDecodeError:
+            return raw_stdout, {}
+
+        if not isinstance(data, dict):
+            return raw_stdout, {}
+
+        text = data.get("result", raw_stdout)
+        usage = data.get("usage", {})
+        return str(text), usage if isinstance(usage, dict) else {}
+
     def _run_turn(
         self,
         turn_msg: str,
@@ -397,14 +411,16 @@ class ClaudeAgentRunner(AgentRunner):
         timeout_seconds: int,
         env: dict,
         log_fh,
-    ) -> tuple[int, str]:
+    ) -> tuple[int, str, dict]:
         """Invoke `claude --print` for one turn, streaming output to log in real-time."""
         cmd = [
             "claude",
             "--print",
-            "--output-format", "text",
+            "--output-format", "json",
             "--dangerously-skip-permissions",
         ]
+        if self.config.model:
+            cmd += ["--model", self.config.model]
         if system_prompt:
             cmd += ["--system-prompt", system_prompt]
         cmd += [turn_msg]
@@ -437,20 +453,20 @@ class ClaudeAgentRunner(AgentRunner):
             except subprocess.TimeoutExpired:
                 proc.kill()
                 proc.wait()
-                return -1, f"[timeout after {timeout_seconds}s]"
+                return -1, f"[timeout after {timeout_seconds}s]", {}
 
             stdout_thread.join(timeout=5)
             stderr = proc.stderr.read()
             self._active_proc = None
-            output = "".join(output_lines)
+            output, usage = self._parse_claude_output("".join(output_lines))
             if stderr:
                 output += "\n[stderr]\n" + stderr
-            return proc.returncode, output
+            return proc.returncode, output, usage
 
         except FileNotFoundError:
-            return -2, "[claude CLI not found in PATH]"
+            return -2, "[claude CLI not found in PATH]", {}
         except Exception as e:
-            return -3, f"[exception: {e}]"
+            return -3, f"[exception: {e}]", {}
 
     # ------------------------------------------------------------------
     # Helpers
