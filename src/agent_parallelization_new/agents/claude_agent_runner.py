@@ -20,6 +20,7 @@ from typing import Optional
 from agent_parallelization_new.agents.base import AgentRunner
 from agent_parallelization_new.budgeting import BudgetTracker
 from agent_parallelization_new.config import AgentConfig
+from agent_parallelization_new.utils.log_parser import parse_training_seconds, parse_val_bpb
 
 
 def _ts() -> str:
@@ -107,8 +108,11 @@ class ClaudeAgentRunner(AgentRunner):
         self.turn_count = 0
         self.turns_log_path = self.results_dir / "turns.jsonl"
         self.turns_log_path.write_text("")
+        self.training_runs_log_path = self.results_dir / "training_runs.jsonl"
+        self.training_runs_log_path.write_text("")
         self._cumulative_chars = 0
         self._turn_records: list[dict] = []
+        self._training_run_count = 0
         backoff = self.INITIAL_BACKOFF_SEC
         noreply_count = 0
         first_turn = True
@@ -375,7 +379,9 @@ class ClaudeAgentRunner(AgentRunner):
             if trigger_seen and not result_seen and result.exists():
                 result_seen = True
                 trigger_seen = False
-                elapsed = f"{time.time() - run_wall_start:.0f}s" if run_wall_start else "?s"
+                finished_at = time.time()
+                wall_seconds = finished_at - run_wall_start if run_wall_start else None
+                elapsed = f"{wall_seconds:.0f}s" if wall_seconds is not None else "?s"
                 val_bpb = None
                 try:
                     for src in (result, train_out):
@@ -388,6 +394,30 @@ class ClaudeAgentRunner(AgentRunner):
                             break
                 except OSError:
                     pass
+
+                parsed_val_bpb = parse_val_bpb(train_out) if train_out.exists() else None
+                if parsed_val_bpb is None and val_bpb is not None:
+                    try:
+                        parsed_val_bpb = float(val_bpb)
+                    except ValueError:
+                        parsed_val_bpb = None
+                training_seconds = (
+                    parse_training_seconds(train_out) if train_out.exists() else None
+                )
+                self._training_run_count += 1
+                training_run_record = {
+                    "run_index": self._training_run_count,
+                    "turn": self.turn_count,
+                    "started_at": run_wall_start,
+                    "finished_at": finished_at,
+                    "wall_seconds": wall_seconds,
+                    "training_seconds": training_seconds,
+                    "val_bpb": parsed_val_bpb,
+                    "status": "success" if parsed_val_bpb is not None else "crash",
+                }
+                with open(self.training_runs_log_path, "a") as runs_fh:
+                    runs_fh.write(json.dumps(training_run_record) + "\n")
+
                 if val_bpb:
                     try:
                         observed_val_bpbs.append(float(val_bpb))
