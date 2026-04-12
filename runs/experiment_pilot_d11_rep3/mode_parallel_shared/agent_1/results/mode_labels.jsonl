@@ -1,0 +1,1 @@
+{"step": 1, "mode": "architecture", "diff_lines_changed": 10, "hypothesis": "reduce WEIGHT_DECAY from 1e-4 to 5e-5", "val_bpb_after": null, "accepted": null}

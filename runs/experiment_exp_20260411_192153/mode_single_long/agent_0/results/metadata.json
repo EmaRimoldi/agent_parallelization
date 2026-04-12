@@ -1,0 +1,16 @@
+{
+  "agent_id": "agent_0",
+  "run_id": "exp_20260411_192153",
+  "experiment_id": "exp_20260411_192153",
+  "start_time": "2026-04-11T23:21:53.261527+00:00",
+  "end_time": "2026-04-11T23:32:06.687222+00:00",
+  "total_turns": 1,
+  "budget_seconds": 600,
+  "model": "claude-haiku-4-5-20251001",
+  "total_input_tokens": 2038,
+  "total_output_tokens": 0,
+  "avg_context_fill": 0.0101925,
+  "final_context_fill": 0.0101925,
+  "total_training_runs": 4,
+  "best_val_bpb": 0.762214
+}

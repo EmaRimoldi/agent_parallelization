@@ -57,7 +57,7 @@ def _coerce_config_for_mode(
         config.agents = [
             AgentConfig(
                 agent_id="agent_0",
-                time_budget_minutes=config.base_time_budget_minutes * 2,
+                time_budget_minutes=config.base_time_budget_minutes,
                 train_time_budget_seconds=config.train_time_budget_seconds,
                 cuda_device=template.cuda_device,
                 model=template.model,
@@ -90,10 +90,10 @@ def _coerce_config_for_mode(
 def main_parallel(argv=None) -> None:
     parser = argparse.ArgumentParser(description="Run parallel-agent experiment (Mode 1)")
     parser.add_argument("--config", type=str, default=None,
-                        help="Path to experiment.yaml. If provided, all other flags are ignored.")
-    parser.add_argument("--time-budget", type=int, default=30, help="Budget per agent (minutes)")
-    parser.add_argument("--train-budget", type=int, default=300, help="Budget per training run (seconds)")
-    parser.add_argument("--n-agents", type=int, default=2, help="Number of parallel agents")
+                        help="Path to experiment.yaml. Command-line flags override it when provided.")
+    parser.add_argument("--time-budget", type=int, default=None, help="Budget per agent (minutes)")
+    parser.add_argument("--train-budget", type=int, default=None, help="Budget per training run (seconds)")
+    parser.add_argument("--n-agents", type=int, default=None, help="Number of parallel agents")
     parser.add_argument("--experiment-id", type=str, default=None)
     parser.add_argument("--runs-dir", type=str, default="runs")
     args = parser.parse_args(argv)
@@ -102,14 +102,20 @@ def main_parallel(argv=None) -> None:
 
     if args.config:
         config = ExperimentConfig.from_yaml(Path(args.config), repo_root=str(repo_root))
+        if args.experiment_id is not None:
+            config.experiment_id = args.experiment_id
+        if args.time_budget is not None:
+            config.base_time_budget_minutes = args.time_budget
+        if args.train_budget is not None:
+            config.train_time_budget_seconds = args.train_budget
         config = _coerce_config_for_mode(config, "parallel", n_agents=args.n_agents)
     else:
         experiment_id = args.experiment_id or _make_experiment_id("parallel")
         config = ExperimentConfig.make_n_parallel(
             experiment_id=experiment_id,
-            n_agents=args.n_agents,
-            time_budget_minutes=args.time_budget,
-            train_time_budget_seconds=args.train_budget,
+            n_agents=args.n_agents or 2,
+            time_budget_minutes=args.time_budget or 30,
+            train_time_budget_seconds=args.train_budget or 300,
             repo_root=str(repo_root),
         )
 
@@ -146,10 +152,10 @@ def main_parallel(argv=None) -> None:
 def main_parallel_shared(argv=None) -> None:
     parser = argparse.ArgumentParser(description="Run parallel-agent experiment with shared memory")
     parser.add_argument("--config", type=str, default=None,
-                        help="Path to experiment.yaml. If provided, all other flags are ignored.")
-    parser.add_argument("--time-budget", type=int, default=30, help="Budget per agent (minutes)")
-    parser.add_argument("--train-budget", type=int, default=300, help="Budget per training run (seconds)")
-    parser.add_argument("--n-agents", type=int, default=2, help="Number of parallel agents")
+                        help="Path to experiment.yaml. Command-line flags override it when provided.")
+    parser.add_argument("--time-budget", type=int, default=None, help="Budget per agent (minutes)")
+    parser.add_argument("--train-budget", type=int, default=None, help="Budget per training run (seconds)")
+    parser.add_argument("--n-agents", type=int, default=None, help="Number of parallel agents")
     parser.add_argument("--experiment-id", type=str, default=None)
     parser.add_argument("--runs-dir", type=str, default="runs")
     args = parser.parse_args(argv)
@@ -158,14 +164,20 @@ def main_parallel_shared(argv=None) -> None:
 
     if args.config:
         config = ExperimentConfig.from_yaml(Path(args.config), repo_root=str(repo_root))
+        if args.experiment_id is not None:
+            config.experiment_id = args.experiment_id
+        if args.time_budget is not None:
+            config.base_time_budget_minutes = args.time_budget
+        if args.train_budget is not None:
+            config.train_time_budget_seconds = args.train_budget
         config = _coerce_config_for_mode(config, "parallel_shared", n_agents=args.n_agents)
     else:
         experiment_id = args.experiment_id or _make_experiment_id("parallel_shared")
         config = ExperimentConfig.make_n_parallel(
             experiment_id=experiment_id,
-            n_agents=args.n_agents,
-            time_budget_minutes=args.time_budget,
-            train_time_budget_seconds=args.train_budget,
+            n_agents=args.n_agents or 2,
+            time_budget_minutes=args.time_budget or 30,
+            train_time_budget_seconds=args.train_budget or 300,
             repo_root=str(repo_root),
         )
         config.mode = "parallel_shared"
@@ -205,9 +217,9 @@ def main_parallel_shared(argv=None) -> None:
 def main_single_long(argv=None) -> None:
     parser = argparse.ArgumentParser(description="Run single-agent-longer experiment (Mode 2)")
     parser.add_argument("--config", type=str, default=None,
-                        help="Path to experiment.yaml. If provided, all other flags are ignored.")
-    parser.add_argument("--time-budget", type=int, default=30, help="Base budget T (minutes); agent gets 2T")
-    parser.add_argument("--train-budget", type=int, default=300, help="Budget per training run (seconds)")
+                        help="Path to experiment.yaml. Command-line flags override it when provided.")
+    parser.add_argument("--time-budget", type=int, default=None, help="Agent wall-clock budget (minutes)")
+    parser.add_argument("--train-budget", type=int, default=None, help="Budget per training run (seconds)")
     parser.add_argument("--experiment-id", type=str, default=None)
     parser.add_argument("--runs-dir", type=str, default="runs")
     args = parser.parse_args(argv)
@@ -216,13 +228,19 @@ def main_single_long(argv=None) -> None:
 
     if args.config:
         config = ExperimentConfig.from_yaml(Path(args.config), repo_root=str(repo_root))
+        if args.experiment_id is not None:
+            config.experiment_id = args.experiment_id
+        if args.time_budget is not None:
+            config.base_time_budget_minutes = args.time_budget
+        if args.train_budget is not None:
+            config.train_time_budget_seconds = args.train_budget
         config = _coerce_config_for_mode(config, "single_long")
     else:
         experiment_id = args.experiment_id or _make_experiment_id("single")
         config = ExperimentConfig.make_single_long(
             experiment_id=experiment_id,
-            time_budget_minutes=args.time_budget,
-            train_time_budget_seconds=args.train_budget,
+            time_budget_minutes=args.time_budget or 30,
+            train_time_budget_seconds=args.train_budget or 300,
             repo_root=str(repo_root),
         )
 
@@ -257,9 +275,9 @@ def main_single_long(argv=None) -> None:
 def main_single_memory(argv=None) -> None:
     parser = argparse.ArgumentParser(description="Run single-agent experiment with external memory")
     parser.add_argument("--config", type=str, default=None,
-                        help="Path to experiment.yaml. If provided, all other flags are ignored.")
-    parser.add_argument("--time-budget", type=int, default=30, help="Base budget T (minutes); agent gets 2T")
-    parser.add_argument("--train-budget", type=int, default=300, help="Budget per training run (seconds)")
+                        help="Path to experiment.yaml. Command-line flags override it when provided.")
+    parser.add_argument("--time-budget", type=int, default=None, help="Agent wall-clock budget (minutes)")
+    parser.add_argument("--train-budget", type=int, default=None, help="Budget per training run (seconds)")
     parser.add_argument("--experiment-id", type=str, default=None)
     parser.add_argument("--runs-dir", type=str, default="runs")
     args = parser.parse_args(argv)
@@ -268,13 +286,19 @@ def main_single_memory(argv=None) -> None:
 
     if args.config:
         config = ExperimentConfig.from_yaml(Path(args.config), repo_root=str(repo_root))
+        if args.experiment_id is not None:
+            config.experiment_id = args.experiment_id
+        if args.time_budget is not None:
+            config.base_time_budget_minutes = args.time_budget
+        if args.train_budget is not None:
+            config.train_time_budget_seconds = args.train_budget
         config = _coerce_config_for_mode(config, "single_memory")
     else:
         experiment_id = args.experiment_id or _make_experiment_id("single_memory")
         config = ExperimentConfig.make_single_memory(
             experiment_id=experiment_id,
-            time_budget_minutes=args.time_budget,
-            train_time_budget_seconds=args.train_budget,
+            time_budget_minutes=args.time_budget or 30,
+            train_time_budget_seconds=args.train_budget or 300,
             repo_root=str(repo_root),
         )
 

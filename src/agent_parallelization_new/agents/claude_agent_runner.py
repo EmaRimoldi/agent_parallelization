@@ -35,6 +35,42 @@ def _log(log_fh, msg: str) -> None:
     log_fh.flush()
 
 
+def _workspace_git_state(workspace: Path) -> dict[str, object]:
+    """Return lightweight git state for the workspace."""
+    state: dict[str, object] = {
+        "commit": None,
+        "commit_short": None,
+        "train_py_dirty": None,
+    }
+    try:
+        commit = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=workspace,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        if commit:
+            state["commit"] = commit
+            state["commit_short"] = commit[:8]
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+    try:
+        dirty = subprocess.run(
+            ["git", "status", "--porcelain", "--", "train.py"],
+            cwd=workspace,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        state["train_py_dirty"] = bool(dirty)
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+    return state
+
+
 class ClaudeAgentRunner(AgentRunner):
     """Runs a Claude Code sub-agent via the `claude` CLI.
 
@@ -55,8 +91,9 @@ class ClaudeAgentRunner(AgentRunner):
     MIN_TURN_INTERVAL_SEC = 5
     INITIAL_BACKOFF_SEC = 5
     MAX_BACKOFF_SEC = 60
-    FIRST_TURN_TIMEOUT_SEC = 900  # 15 min: start_gpu_worker + SLURM queue + compile + first run
-    MAX_TURN_TIMEOUT_SEC = 900    # 15 min per subsequent turn
+    FIRST_TURN_TIMEOUT_SEC = 300  # 5 min cap per Claude turn
+    MAX_TURN_TIMEOUT_SEC = 300    # 5 min cap per subsequent turn
+    NO_PROGRESS_TURN_TIMEOUT_SEC = 90
     HEARTBEAT_INTERVAL_SEC = 30   # log "still alive" every 30s during a turn
 
     @staticmethod
@@ -94,6 +131,9 @@ class ClaudeAgentRunner(AgentRunner):
         )
 
         self._active_proc: Optional[subprocess.Popen] = None
+        self._planned_turn_stop = False
+        self._planned_turn_stop_reason = ""
+        self._pending_turn_stop_at: Optional[float] = None
 
         budget = BudgetTracker(
             wall_clock_budget_seconds=config.time_budget_minutes * 60,
@@ -138,6 +178,12 @@ class ClaudeAgentRunner(AgentRunner):
                 daemon=True,
             ).start()
 
+            threading.Thread(
+                target=self._watch_budget_expiry,
+                args=(budget, log_fh, _stop_watcher),
+                daemon=True,
+            ).start()
+
             while True:
                 if budget.startup_expired():
                     msg = f"[{config.agent_id}] ABORT: no successful turn within startup deadline."
@@ -151,7 +197,10 @@ class ClaudeAgentRunner(AgentRunner):
 
                 if first_turn:
                     turn_msg = first_message
-                    turn_timeout = max(self.FIRST_TURN_TIMEOUT_SEC, int(budget.remaining_seconds()))
+                    turn_timeout = min(
+                        self.FIRST_TURN_TIMEOUT_SEC,
+                        max(int(budget.remaining_seconds()), 60),
+                    )
                     _log(log_fh, f"[{config.agent_id}] Turn {self.turn_count} starting (first turn).")
                 else:
                     mins_left = budget.remaining_minutes()
@@ -173,9 +222,20 @@ class ClaudeAgentRunner(AgentRunner):
                             f"You can fit approximately {runs_remaining} more run(s)."
                         )
                     turn_msg = (
+                        f"Current workspace: {self.workspace}. Stay in this directory, "
+                        "use only the local worker scripts here, and do not inspect or "
+                        "mention any other repository path or external GPU environment. "
+                        "Do not modify or delete any helper scripts; only `train.py` may change. "
                         f"Continue the research. ~{mins_left} min remaining in budget. "
                         f"{time_guidance} "
-                        f"Keep modifying train.py and running experiments to improve val_bpb."
+                        "In this Claude turn, recover WORKER_JOB_ID from `.worker_job_id` or "
+                        "start and save it if missing. Determine the next STEP from "
+                        "`reasoning/trace.jsonl`. Run at most one new experiment iteration: "
+                        "pick one hypothesis, edit train.py, commit it, save the snapshot, run "
+                        "exactly one training run, update results.tsv and the snapshot, then stop "
+                        "and return a brief summary. Do not start a second training run in this turn. "
+                        "If you cannot decide on a concrete run quickly, stop and summarize instead of "
+                        "thinking indefinitely."
                     )
                     if self.config.use_shared_memory:
                         memory = self._build_shared_memory_context()
@@ -188,7 +248,20 @@ class ClaudeAgentRunner(AgentRunner):
                     turn_timeout = min(secs_left, self.MAX_TURN_TIMEOUT_SEC)
                     _log(log_fh, f"[{config.agent_id}] Turn {self.turn_count} starting (~{mins_left} min remaining).")
 
+                log_fh.write(
+                    f"[{_ts()}] [{config.agent_id}] Turn {self.turn_count} message begin\n"
+                )
+                log_fh.write(turn_msg.rstrip() + "\n")
+                log_fh.write(
+                    f"[{_ts()}] [{config.agent_id}] Turn {self.turn_count} message end\n"
+                )
+                log_fh.flush()
+
                 turn_start = time.monotonic()
+                self._training_runs_this_turn = 0
+                self._pending_turn_stop_at = None
+                self._turn_started_at = turn_start
+                self._turn_training_started = False
 
                 # Heartbeat thread: logs "still alive" every HEARTBEAT_INTERVAL_SEC
                 _turn_done = threading.Event()
@@ -208,6 +281,18 @@ class ClaudeAgentRunner(AgentRunner):
                 )
                 _turn_done.set()
                 turn_elapsed = time.monotonic() - turn_start
+
+                if self._planned_turn_stop and exit_code != 0:
+                    stripped_output = output.strip()
+                    hook_cancelled = (
+                        "SessionEnd hook" in stripped_output
+                        and "Hook cancelled" in stripped_output
+                    )
+                    if not stripped_output or hook_cancelled:
+                        exit_code = 0
+                        output = f"[{self._planned_turn_stop_reason}]"
+                self._planned_turn_stop = False
+                self._planned_turn_stop_reason = ""
 
                 system_prompt_chars = len(effective_system_prompt) if effective_system_prompt else 0
                 turn_msg_chars = len(turn_msg)
@@ -338,6 +423,11 @@ class ClaudeAgentRunner(AgentRunner):
         results_tsv_lines = 0
         train_out_lines = 0
         shared_logged_steps: set[int] = set()
+        run_git_state: dict[str, object] = {
+            "commit": None,
+            "commit_short": None,
+            "train_py_dirty": None,
+        }
 
         while not stop_event.is_set():
             # train.py modified → log diff vs baseline so we see what changed
@@ -391,8 +481,16 @@ class ClaudeAgentRunner(AgentRunner):
                 trigger_seen = True
                 result_seen = False
                 run_count += 1
+                self._turn_training_started = True
                 run_wall_start = time.time()
-                train_out_lines = 0  # reset stream cursor for new run
+                run_git_state = _workspace_git_state(ws)
+                if train_out.exists():
+                    try:
+                        train_out_lines = len(train_out.read_text().splitlines())
+                    except OSError:
+                        train_out_lines = 0
+                else:
+                    train_out_lines = 0
                 _log(log_fh, f"[{agent_id}] Training run #{run_count} started.")
 
             # stream new lines from train_current.out while a run is active
@@ -439,6 +537,9 @@ class ClaudeAgentRunner(AgentRunner):
                     parse_training_seconds(train_out) if train_out.exists() else None
                 )
                 self._training_run_count += 1
+                self._training_runs_this_turn = getattr(
+                    self, "_training_runs_this_turn", 0
+                ) + 1
                 training_run_record = {
                     "run_index": self._training_run_count,
                     "turn": self.turn_count,
@@ -448,6 +549,9 @@ class ClaudeAgentRunner(AgentRunner):
                     "training_seconds": training_seconds,
                     "val_bpb": parsed_val_bpb,
                     "status": "success" if parsed_val_bpb is not None else "crash",
+                    "commit": run_git_state.get("commit"),
+                    "commit_short": run_git_state.get("commit_short"),
+                    "train_py_dirty": run_git_state.get("train_py_dirty"),
                 }
                 with open(self.training_runs_log_path, "a") as runs_fh:
                     runs_fh.write(json.dumps(training_run_record) + "\n")
@@ -467,7 +571,76 @@ class ClaudeAgentRunner(AgentRunner):
                     _log(log_fh, f"[{agent_id}] Training run #{run_count} done — {status} (elapsed: {elapsed})")
                     _dump_slurm_failure_logs(ws, agent_id, run_count, log_fh)
 
+                self._pending_turn_stop_at = time.monotonic() + 2.0
+
+            if (
+                self._pending_turn_stop_at is not None
+                and time.monotonic() >= self._pending_turn_stop_at
+                and not trigger.exists()
+            ):
+                self._pending_turn_stop_at = None
+                self._terminate_active_turn(
+                    log_fh,
+                    f"[{agent_id}] Completed planned training run for this turn.",
+                    planned=True,
+                )
+
+            if (
+                getattr(self, "_turn_started_at", None) is not None
+                and not getattr(self, "_turn_training_started", False)
+                and time.monotonic() - self._turn_started_at >= self.NO_PROGRESS_TURN_TIMEOUT_SEC
+            ):
+                self._turn_started_at = None
+                self._terminate_active_turn(
+                    log_fh,
+                    f"[{agent_id}] No training run started within "
+                    f"{self.NO_PROGRESS_TURN_TIMEOUT_SEC}s — ending turn to preserve budget.",
+                    planned=True,
+                )
+
             stop_event.wait(2)
+
+    def _watch_budget_expiry(
+        self,
+        budget: BudgetTracker,
+        log_fh,
+        stop_event: threading.Event,
+    ) -> None:
+        """Stop an active Claude turn once wall-clock budget has expired.
+
+        If a training run is still active, wait for that run to finish so we do not
+        kill the worker mid-train. As soon as no run is active, terminate the Claude
+        subprocess so the outer loop can exit cleanly.
+        """
+        budget_expired_logged = False
+        trigger = self.workspace / "run.trigger"
+
+        while not stop_event.is_set():
+            if not budget.budget_started() or not budget.should_stop():
+                stop_event.wait(2)
+                continue
+
+            proc = self._active_proc
+            if proc is None or proc.poll() is not None:
+                return
+
+            if trigger.exists():
+                if not budget_expired_logged:
+                    _log(
+                        log_fh,
+                        f"[{self.config.agent_id}] Budget expired during an active training run; "
+                        "waiting for the run to finish before stopping the turn.",
+                    )
+                    budget_expired_logged = True
+                stop_event.wait(2)
+                continue
+
+            self._terminate_active_turn(
+                log_fh,
+                f"[{self.config.agent_id}] Budget expired — terminating active Claude turn.",
+                planned=True,
+            )
+            return
 
     def _heartbeat(
         self,
@@ -573,6 +746,22 @@ class ClaudeAgentRunner(AgentRunner):
         """Estimate context fill ratio c/K from cumulative character count."""
         estimated_tokens = self._cumulative_chars / 4
         return min(estimated_tokens / 200_000, 1.0)
+
+    def _terminate_active_turn(self, log_fh, reason: str, planned: bool = False) -> None:
+        """Terminate the active Claude subprocess if it is still running."""
+        proc = self._active_proc
+        if proc is None or proc.poll() is not None:
+            return
+        if planned:
+            self._planned_turn_stop = True
+            self._planned_turn_stop_reason = reason
+        _log(log_fh, reason)
+        try:
+            proc.terminate()
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
 
     def _build_memory_context(self) -> str:
         """Build a compact experiment log from the agent's private trace."""
@@ -698,7 +887,7 @@ class ClaudeAgentRunner(AgentRunner):
             "experiment_id": experiment_id,
             "start_time": start_time,
             "end_time": end_time,
-            "total_turns": total_turns,
+            "total_turns": max(total_turns, len(getattr(self, "_turn_records", []))),
             "budget_seconds": budget_seconds,
             "model": self.config.model,
             "total_input_tokens": sum(

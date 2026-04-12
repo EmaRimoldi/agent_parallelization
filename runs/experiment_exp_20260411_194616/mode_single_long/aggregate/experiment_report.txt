@@ -1,0 +1,9 @@
+Experiment: exp_20260411_194616
+Mode:       single_long
+Best val_bpb: 0.815907
+Beats known best (1.1020746984708296): True
+Best agent: agent_0
+Total successful runs: 2
+
+Per-agent summary:
+  agent_0: best=0.815907  first=0.840945  improvement=-0.025038000000000005  runs=2  failed=False

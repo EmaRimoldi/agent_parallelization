@@ -9,6 +9,13 @@ You are one of possibly several independent agents running in parallel. You have
 knowledge of what other agents are doing, and you must not try to communicate with them.
 Your work is completely isolated.
 
+You are already inside the correct experiment workspace for this run. Use only the files
+and scripts in the current working directory. Do not `cd` to, inspect, or mention any
+other repository path. Do not speculate about external GPU availability or ask for human
+guidance about compute. The only valid training interface is the local
+`start_gpu_worker.sh` / `run_on_worker.sh` / `stop_gpu_worker.sh` scripts in this
+workspace.
+
 ## What you can do
 
 - Modify `train.py` — this is the **only file you may modify**.
@@ -23,20 +30,50 @@ Your work is completely isolated.
 
 - Modify `prepare.py` — it is read-only. It provides the training substrate's
   constants, data loaders, and evaluation helpers.
+- Delete or modify helper scripts such as `start_gpu_worker.sh`, `run_on_worker.sh`,
+  `stop_gpu_worker.sh`, snapshot helpers, or anything besides `train.py`.
 - Install new packages or add dependencies.
 - Modify the evaluation harness.
 - Access other agents' workspaces, files, or results.
 
 ## Workflow
 
-**Before the loop — do this once:**
+**At the start of each Claude invocation:**
 
 ```bash
-WORKER_JOB_ID=$(bash start_gpu_worker.sh)
+if [ -f .worker_job_id ]; then
+  WORKER_JOB_ID=$(cat .worker_job_id)
+else
+  WORKER_JOB_ID=$(bash start_gpu_worker.sh)
+  echo "$WORKER_JOB_ID" > .worker_job_id
+fi
 echo "Worker job: $WORKER_JOB_ID"
 ```
 
-LOOP FOREVER until you are manually stopped:
+Determine the next integer `STEP` from the existing reasoning trace before saving a new snapshot:
+
+```bash
+STEP=$(python - <<'PY'
+from pathlib import Path
+import json
+
+trace = Path("reasoning/trace.jsonl")
+max_step = 0
+if trace.exists():
+    for line in trace.read_text().splitlines():
+        if not line.strip():
+            continue
+        try:
+            max_step = max(max_step, int(json.loads(line).get("step_index", 0)))
+        except Exception:
+            pass
+print(max_step + 1)
+PY
+)
+echo "STEP=$STEP"
+```
+
+For each Claude invocation, do **at most one** new training run and then stop:
 
 1. Form a hypothesis: one small change to a scalar hyperparameter
 2. Make the change to `train.py`
@@ -53,9 +90,11 @@ LOOP FOREVER until you are manually stopped:
    Example: `python update_snapshot.py 1 1.23 true "val_bpb improved" "try lower WEIGHT_DECAY next"`
 10. If `val_bpb` improved (lower): keep the commit
 11. If `val_bpb` is equal or worse: `git reset --hard HEAD~1` and try something else
-12. Repeat with STEP+1
+12. Stop after this single iteration and return a brief summary so the controller can issue the next turn.
 
-**When interrupted or at natural end:**
+If there is not enough time left for another training run, do not start one. Briefly summarize the current best result and stop.
+
+**When the controller explicitly tells you the session is ending:**
 
 ```bash
 bash stop_gpu_worker.sh $WORKER_JOB_ID
@@ -120,11 +159,8 @@ commit	val_bpb	memory_gb	status	description
 - `status`: `keep`, `discard`, or `crash`
 - `description`: brief text (no tabs!)
 
-## NEVER STOP
+## Turn Discipline
 
-Once the experiment loop has begun, do **NOT** pause to ask if you should continue.
-Do **NOT** ask "should I keep going?" or "is this a good stopping point?".
-You are fully autonomous. The loop runs until you are manually interrupted, period.
-
-Do NOT pause to ask the human if you should continue.
-The loop runs until the human interrupts you, period.
+Do **NOT** ask whether you should continue. After one bounded iteration, stop and
+return control to the controller. The controller will decide whether to send the
+next turn.

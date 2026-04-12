@@ -1,0 +1,4 @@
+{"run_index": 1, "turn": 0, "started_at": 1775958425.505322, "finished_at": 1775958561.9412858, "wall_seconds": 136.43596386909485, "training_seconds": 120.1, "val_bpb": 0.827488, "status": "success"}
+{"run_index": 2, "turn": 1, "started_at": 1775958614.640307, "finished_at": 1775958751.0862331, "wall_seconds": 136.4459261894226, "training_seconds": 120.0, "val_bpb": 0.871293, "status": "success"}
+{"run_index": 3, "turn": 7, "started_at": 1775959289.173826, "finished_at": 1775959425.5941188, "wall_seconds": 136.42029285430908, "training_seconds": 120.0, "val_bpb": 0.827078, "status": "success"}
+{"run_index": 4, "turn": 8, "started_at": 1775959478.261707, "finished_at": 1775959612.739747, "wall_seconds": 134.4780399799347, "training_seconds": 120.0, "val_bpb": 0.93377, "status": "success"}

@@ -1,0 +1,29 @@
+{
+  "experiment_id": "pilot_d00_rep2",
+  "mode": "single_long",
+  "base_time_budget_minutes": 30,
+  "train_time_budget_seconds": 120,
+  "autoresearch_dir": "autoresearch",
+  "results_root": "results",
+  "agents": [
+    {
+      "agent_id": "agent_0",
+      "time_budget_minutes": 30,
+      "train_time_budget_seconds": 120,
+      "cuda_device": "0",
+      "model": "claude-haiku-4-5-20251001",
+      "temperature": null,
+      "use_external_memory": false,
+      "use_shared_memory": false,
+      "system_prompt_file": "templates/agent_system_prompt.md",
+      "first_message_file": "templates/agent_first_message.md"
+    }
+  ],
+  "repo_root": "/Users/emanuelerimoldi/Documents/GitHub/agent_parallelization",
+  "slurm_enabled": false,
+  "slurm_partition": "pi_tpoggio",
+  "slurm_gres": "gpu:1",
+  "slurm_time": "00:10:00",
+  "system_prompt_file": "templates/agent_system_prompt.md",
+  "first_message_file": "templates/agent_first_message.md"
+}

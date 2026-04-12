@@ -1,0 +1,1 @@
+{"step": 1, "mode": "architecture", "diff_lines_changed": 10, "hypothesis": "reduce DROPOUT_RATE from 0.2 to 0.05", "val_bpb_after": null, "accepted": null}

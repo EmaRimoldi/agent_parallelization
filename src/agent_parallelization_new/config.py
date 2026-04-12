@@ -219,7 +219,7 @@ class ExperimentConfig:
             agent_list = [
                 AgentConfig(
                     agent_id="agent_0",
-                    time_budget_minutes=budget * 2,
+                    time_budget_minutes=budget,
                     train_time_budget_seconds=train_s,
                     cuda_device=devices[0],
                     model=single_agent_overrides.get("model", model),

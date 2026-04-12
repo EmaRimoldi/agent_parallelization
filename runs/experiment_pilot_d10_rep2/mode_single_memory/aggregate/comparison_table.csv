@@ -1,0 +1,2 @@
+agent_id,best_val_bpb,first_val_bpb,improvement,total_runs,successful_runs,failed,failure_reason,total_turns
+agent_0,0.760959,0.765498,-0.00453899999999996,9,9,False,,13

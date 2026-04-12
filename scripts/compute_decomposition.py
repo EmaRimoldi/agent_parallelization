@@ -25,6 +25,29 @@ from pathlib import Path
 import numpy as np
 
 
+def is_credible_training_run(row: dict) -> bool:
+    """Filter out spurious watcher rows that do not look like real training attempts."""
+    if row.get("val_bpb") is None:
+        return False
+
+    wall = row.get("wall_seconds")
+    train = row.get("training_seconds")
+    try:
+        wall_f = float(wall) if wall is not None else None
+    except (TypeError, ValueError):
+        wall_f = None
+    try:
+        train_f = float(train) if train is not None else None
+    except (TypeError, ValueError):
+        train_f = None
+
+    if train_f is not None and wall_f is not None:
+        return wall_f >= max(30.0, 0.75 * train_f)
+    if wall_f is not None:
+        return wall_f >= 60.0
+    return False
+
+
 def load_cell_data(experiment_dir: Path) -> dict:
     """Load all instrumented data from one cell of the 2x2."""
     data = {
@@ -44,7 +67,9 @@ def load_cell_data(experiment_dir: Path) -> dict:
         if runs_path.exists():
             for line in runs_path.read_text().splitlines():
                 if line.strip():
-                    data["training_runs"].append(json.loads(line))
+                    row = json.loads(line)
+                    if is_credible_training_run(row):
+                        data["training_runs"].append(row)
 
         labels_path = agent_dir / "results" / "mode_labels.jsonl"
         if labels_path.exists():

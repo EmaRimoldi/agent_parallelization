@@ -9,15 +9,15 @@ experiment:
   # Execution mode: parallel | parallel_shared | single_long | single_memory
   #   parallel    — N independent agents running simultaneously
   #   parallel_shared — N independent agents with a shared experiment log
-  #   single_long — 1 agent with 2× the time budget
-  #   single_memory — 1 agent with 2× the time budget and external memory
+  #   single_long — 1 agent with the configured time budget
+  #   single_memory — 1 agent with the configured time budget and external memory
   mode: parallel
   # Directory under which run outputs are written (relative to repo root).
   runs_dir: runs
 
 # ── Agent settings ────────────────────────────────────────────────
 agents:
-  # Number of parallel agents (ignored in single_long mode).
+  # Number of parallel agents (ignored in single-agent modes).
   n: 3
 
   # Claude model used for every sub-agent.
@@ -25,7 +25,6 @@ agents:
   model: claude-haiku-4-5-20251001
 
   # Wall-clock budget per agent in minutes.
-  # In single_long mode the one agent receives 2× this value.
   time_budget_minutes: 30
 
   # Maximum seconds allowed for a single SLURM training job.

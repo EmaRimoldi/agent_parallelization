@@ -1,0 +1,23 @@
+[restart] Resuming Phase 2 after fixing single-memory prompt anchoring.
+[1/11] START pilot_d10_rep1: run-single-memory --experiment-id pilot_d10_rep1 --time-budget 30 --config configs/experiment_d10.yaml
+[1/11] DONE pilot_d10_rep1
+[2/11] START pilot_d01_rep1: run-parallel --experiment-id pilot_d01_rep1 --time-budget 30 --config configs/experiment_d01.yaml
+[2/11] DONE pilot_d01_rep1
+[3/11] START pilot_d11_rep1: run-parallel-shared --experiment-id pilot_d11_rep1 --time-budget 30 --config configs/experiment_d11.yaml
+[3/11] DONE pilot_d11_rep1
+[4/11] START pilot_d00_rep2: run-single-long --experiment-id pilot_d00_rep2 --time-budget 30 --config configs/experiment_d00.yaml
+[4/11] DONE pilot_d00_rep2
+[5/11] START pilot_d10_rep2: run-single-memory --experiment-id pilot_d10_rep2 --time-budget 30 --config configs/experiment_d10.yaml
+[5/11] DONE pilot_d10_rep2
+[6/11] START pilot_d01_rep2: run-parallel --experiment-id pilot_d01_rep2 --time-budget 30 --config configs/experiment_d01.yaml
+[6/11] DONE pilot_d01_rep2
+[7/11] START pilot_d11_rep2: run-parallel-shared --experiment-id pilot_d11_rep2 --time-budget 30 --config configs/experiment_d11.yaml
+[7/11] DONE pilot_d11_rep2
+[8/11] START pilot_d00_rep3: run-single-long --experiment-id pilot_d00_rep3 --time-budget 30 --config configs/experiment_d00.yaml
+[8/11] DONE pilot_d00_rep3
+[9/11] START pilot_d10_rep3: run-single-memory --experiment-id pilot_d10_rep3 --time-budget 30 --config configs/experiment_d10.yaml
+[9/11] DONE pilot_d10_rep3
+[10/11] START pilot_d01_rep3: run-parallel --experiment-id pilot_d01_rep3 --time-budget 30 --config configs/experiment_d01.yaml
+[10/11] DONE pilot_d01_rep3
+[11/11] START pilot_d11_rep3: run-parallel-shared --experiment-id pilot_d11_rep3 --time-budget 30 --config configs/experiment_d11.yaml
+[11/11] DONE pilot_d11_rep3

@@ -1,0 +1,1 @@
+{"turn": 0, "timestamp": 1775951006.104023, "model": "claude-haiku-4-5-20251001", "input_tokens": 2191, "output_tokens": 14, "system_prompt_chars": 6748, "turn_msg_chars": 2017, "response_chars": 57, "context_fill_ratio": 0.0110275, "wall_clock_seconds": 161.0142520830268}

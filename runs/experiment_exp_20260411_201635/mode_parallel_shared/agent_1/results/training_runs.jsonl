@@ -1,0 +1,3 @@
+{"run_index": 1, "turn": 0, "started_at": 1775953025.7403688, "finished_at": 1775953162.0834198, "wall_seconds": 136.34305095672607, "training_seconds": 120.0, "val_bpb": 0.934241, "status": "success"}
+{"run_index": 2, "turn": 1, "started_at": 1775953198.736301, "finished_at": 1775953335.1268742, "wall_seconds": 136.39057326316833, "training_seconds": 120.0, "val_bpb": 1.050428, "status": "success"}
+{"run_index": 3, "turn": 2, "started_at": 1775953383.833002, "finished_at": 1775953518.258469, "wall_seconds": 134.42546701431274, "training_seconds": 120.1, "val_bpb": 0.830162, "status": "success"}

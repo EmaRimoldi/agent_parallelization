@@ -1,0 +1,66 @@
+{
+  "experiment_id": "exp_20260411_201635",
+  "mode": "parallel_shared",
+  "best_val_bpb": 0.830162,
+  "best_agent_id": "agent_1",
+  "agent_results": [
+    {
+      "agent_id": "agent_0",
+      "experiment_id": "exp_20260411_201635",
+      "mode": "parallel_shared",
+      "start_time": "2026-04-12T00:16:35.612717+00:00",
+      "end_time": "2026-04-12T00:26:33.890133+00:00",
+      "budget_seconds": 600,
+      "total_turns": 11,
+      "trajectory": [
+        {
+          "step": 0,
+          "val_bpb": 0.916976
+        },
+        {
+          "step": 1,
+          "val_bpb": 0.839011
+        }
+      ],
+      "best_val_bpb": 0.839011,
+      "first_val_bpb": 0.916976,
+      "total_training_runs": 2,
+      "successful_training_runs": 2,
+      "workspace_path": "/Users/emanuelerimoldi/Documents/GitHub/agent_parallelization/runs/experiment_exp_20260411_201635/mode_parallel_shared/agent_0/workspace",
+      "results_path": "/Users/emanuelerimoldi/Documents/GitHub/agent_parallelization/runs/experiment_exp_20260411_201635/mode_parallel_shared/agent_0/results",
+      "failed": false,
+      "failure_reason": ""
+    },
+    {
+      "agent_id": "agent_1",
+      "experiment_id": "exp_20260411_201635",
+      "mode": "parallel_shared",
+      "start_time": "2026-04-12T00:16:35.612523+00:00",
+      "end_time": "2026-04-12T00:26:33.962699+00:00",
+      "budget_seconds": 600,
+      "total_turns": 5,
+      "trajectory": [
+        {
+          "step": 0,
+          "val_bpb": 0.934241
+        },
+        {
+          "step": 1,
+          "val_bpb": 1.050428
+        },
+        {
+          "step": 2,
+          "val_bpb": 0.830162
+        }
+      ],
+      "best_val_bpb": 0.830162,
+      "first_val_bpb": 0.934241,
+      "total_training_runs": 3,
+      "successful_training_runs": 3,
+      "workspace_path": "/Users/emanuelerimoldi/Documents/GitHub/agent_parallelization/runs/experiment_exp_20260411_201635/mode_parallel_shared/agent_1/workspace",
+      "results_path": "/Users/emanuelerimoldi/Documents/GitHub/agent_parallelization/runs/experiment_exp_20260411_201635/mode_parallel_shared/agent_1/results",
+      "failed": false,
+      "failure_reason": ""
+    }
+  ]
+}

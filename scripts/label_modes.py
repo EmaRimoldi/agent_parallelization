@@ -41,6 +41,11 @@ MODE_KEYWORDS = {
     ],
     "architecture": [
         "depth",
+        "base_channels",
+        "channel_mult",
+        "use_batchnorm",
+        "dropout_rate",
+        "fc_hidden",
         "aspect_ratio",
         "head_dim",
         "n_head",
@@ -55,6 +60,8 @@ MODE_KEYWORDS = {
         "attention",
     ],
     "batch_data": [
+        "batch_size",
+        "num_workers",
         "total_batch_size",
         "device_batch_size",
         "max_seq_len",

@@ -1,0 +1,12 @@
+single_long finalization report
+experiment:   experiment_pilot_d00_rep2
+agent:        agent_0
+timestamp:    2026-04-12T04:37:20.884086+00:00
+source:       training_runs.jsonl
+best_commit:  9845216789360ba4d9578454183b29628c1701a1
+best_val_bpb: 0.800368
+total_runs:   2
+
+All runs (chronological):
+  98452167  val_bpb=  0.800368  Initial workspace baseline
+  135b47b4  val_bpb=  0.810985  

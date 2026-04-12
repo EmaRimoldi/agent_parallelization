@@ -1,0 +1,2 @@
+{"step": 1, "mode": "lr_schedule", "diff_lines_changed": 4, "hypothesis": "reduce learning rate from 1e-3 to 5e-4", "val_bpb_after": null, "accepted": null}
+{"step": 2, "mode": "lr_schedule", "diff_lines_changed": 4, "hypothesis": "revert to baseline (depth=3, base_ch=32), lower LR to 5e-4", "val_bpb_after": null, "accepted": null}

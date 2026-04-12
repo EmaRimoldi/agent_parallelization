@@ -1,0 +1,19 @@
+single_long finalization report
+experiment:   experiment_pilot_d00_rep3
+agent:        agent_0
+timestamp:    2026-04-12T07:48:38.812960+00:00
+source:       training_runs.jsonl
+best_commit:  5bcad6b32591cc8280f6cc7b41a9ff92ce654b80
+best_val_bpb: 0.798985
+total_runs:   9
+
+All runs (chronological):
+  5ef9e91b  val_bpb=  0.801134  Initial workspace baseline
+  12ef02cd  val_bpb=  0.957634  Increase learning rate from 1e-3 to 1e-2
+  fb993c2c  val_bpb=  0.908553  reduce learning rate from 1e-2 to 5e-3 for training stability
+  d17288fe  val_bpb=  0.834159  lower LEARNING_RATE from 5e-3 to 1e-3 for better convergence in short window
+  5bcad6b3  val_bpb=  0.798985  Increase BASE_CHANNELS from 32 to 48 for improved capacity
+  48b008b6  val_bpb=  1.079863  
+  b102f61b  val_bpb=  0.929552  Step 1: reduce LEARNING_RATE from 1e-3 to 5e-4 for better convergence
+  871d770c  val_bpb=  0.872787  increase BASE_CHANNELS from 48 to 64 for better feature representation
+  dde5fc67  val_bpb=  0.957590  Increase BASE_CHANNELS from 64 to 96 for step 1

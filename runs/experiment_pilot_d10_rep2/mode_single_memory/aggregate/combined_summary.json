@@ -1,0 +1,63 @@
+{
+  "experiment_id": "pilot_d10_rep2",
+  "mode": "single_memory",
+  "best_val_bpb": 0.760959,
+  "best_agent_id": "agent_0",
+  "agent_results": [
+    {
+      "agent_id": "agent_0",
+      "experiment_id": "pilot_d10_rep2",
+      "mode": "single_memory",
+      "start_time": "2026-04-12T04:37:24.196721+00:00",
+      "end_time": "2026-04-12T05:07:13.471870+00:00",
+      "budget_seconds": 1800,
+      "total_turns": 13,
+      "trajectory": [
+        {
+          "step": 0,
+          "val_bpb": 0.765498
+        },
+        {
+          "step": 1,
+          "val_bpb": 0.784801
+        },
+        {
+          "step": 2,
+          "val_bpb": 0.760959
+        },
+        {
+          "step": 3,
+          "val_bpb": 0.780917
+        },
+        {
+          "step": 4,
+          "val_bpb": 1.037689
+        },
+        {
+          "step": 5,
+          "val_bpb": 0.779788
+        },
+        {
+          "step": 6,
+          "val_bpb": 0.96381
+        },
+        {
+          "step": 7,
+          "val_bpb": 0.857874
+        },
+        {
+          "step": 8,
+          "val_bpb": 0.843158
+        }
+      ],
+      "best_val_bpb": 0.760959,
+      "first_val_bpb": 0.765498,
+      "total_training_runs": 9,
+      "successful_training_runs": 9,
+      "workspace_path": "/Users/emanuelerimoldi/Documents/GitHub/agent_parallelization/runs/experiment_pilot_d10_rep2/mode_single_memory/agent_0/workspace",
+      "results_path": "/Users/emanuelerimoldi/Documents/GitHub/agent_parallelization/runs/experiment_pilot_d10_rep2/mode_single_memory/agent_0/results",
+      "failed": false,
+      "failure_reason": ""
+    }
+  ]
+}

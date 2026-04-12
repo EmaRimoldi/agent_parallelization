@@ -1,0 +1,10 @@
+Experiment: pilot_d11_rep1
+Mode:       parallel_shared
+Best val_bpb: 0.801203
+Beats known best (1.1020746984708296): True
+Best agent: agent_1
+Total successful runs: 9
+
+Per-agent summary:
+  agent_0: best=0.844854  first=0.844854  improvement=0.0  runs=4  failed=False
+  agent_1: best=0.801203  first=0.885377  improvement=-0.08417399999999997  runs=5  failed=False

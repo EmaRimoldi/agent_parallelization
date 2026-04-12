@@ -1,0 +1,16 @@
+{
+  "agent_id": "agent_0",
+  "run_id": "pilot_d01_rep2",
+  "experiment_id": "pilot_d01_rep2",
+  "start_time": "2026-04-12T05:07:18.743902+00:00",
+  "end_time": "2026-04-12T06:48:26.109065+00:00",
+  "total_turns": 18,
+  "budget_seconds": 1800,
+  "model": "claude-haiku-4-5-20251001",
+  "total_input_tokens": 25350,
+  "total_output_tokens": 18377,
+  "avg_context_fill": 0.104270625,
+  "final_context_fill": 0.199075,
+  "total_training_runs": 17,
+  "best_val_bpb": 0.82129
+}

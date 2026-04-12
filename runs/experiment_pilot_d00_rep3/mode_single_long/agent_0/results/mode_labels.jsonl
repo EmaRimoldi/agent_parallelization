@@ -1,0 +1,1 @@
+{"step": 1, "mode": "lr_schedule", "diff_lines_changed": 6, "hypothesis": "increase BASE_CHANNELS from 64 to 96", "val_bpb_after": null, "accepted": null}

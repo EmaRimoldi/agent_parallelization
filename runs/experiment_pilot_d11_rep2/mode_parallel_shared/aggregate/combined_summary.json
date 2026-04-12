@@ -1,0 +1,114 @@
+{
+  "experiment_id": "pilot_d11_rep2",
+  "mode": "parallel_shared",
+  "best_val_bpb": 0.803465,
+  "best_agent_id": "agent_0",
+  "agent_results": [
+    {
+      "agent_id": "agent_0",
+      "experiment_id": "pilot_d11_rep2",
+      "mode": "parallel_shared",
+      "start_time": "2026-04-12T06:48:33.451076+00:00",
+      "end_time": "2026-04-12T07:18:24.466974+00:00",
+      "budget_seconds": 1800,
+      "total_turns": 15,
+      "trajectory": [
+        {
+          "step": 0,
+          "val_bpb": 0.844164
+        },
+        {
+          "step": 1,
+          "val_bpb": 0.869781
+        },
+        {
+          "step": 2,
+          "val_bpb": 0.803465
+        },
+        {
+          "step": 3,
+          "val_bpb": 0.95377
+        },
+        {
+          "step": 4,
+          "val_bpb": 0.977102
+        },
+        {
+          "step": 5,
+          "val_bpb": 0.985291
+        },
+        {
+          "step": 6,
+          "val_bpb": 1.141442
+        },
+        {
+          "step": 7,
+          "val_bpb": 1.04525
+        },
+        {
+          "step": 8,
+          "val_bpb": 1.020642
+        }
+      ],
+      "best_val_bpb": 0.803465,
+      "first_val_bpb": 0.844164,
+      "total_training_runs": 9,
+      "successful_training_runs": 9,
+      "workspace_path": "/Users/emanuelerimoldi/Documents/GitHub/agent_parallelization/runs/experiment_pilot_d11_rep2/mode_parallel_shared/agent_0/workspace",
+      "results_path": "/Users/emanuelerimoldi/Documents/GitHub/agent_parallelization/runs/experiment_pilot_d11_rep2/mode_parallel_shared/agent_0/results",
+      "failed": false,
+      "failure_reason": ""
+    },
+    {
+      "agent_id": "agent_1",
+      "experiment_id": "pilot_d11_rep2",
+      "mode": "parallel_shared",
+      "start_time": "2026-04-12T06:48:33.454364+00:00",
+      "end_time": "2026-04-12T07:18:26.498021+00:00",
+      "budget_seconds": 1800,
+      "total_turns": 12,
+      "trajectory": [
+        {
+          "step": 0,
+          "val_bpb": 0.90516
+        },
+        {
+          "step": 1,
+          "val_bpb": 0.988694
+        },
+        {
+          "step": 2,
+          "val_bpb": 0.84696
+        },
+        {
+          "step": 3,
+          "val_bpb": 0.900029
+        },
+        {
+          "step": 4,
+          "val_bpb": 0.982018
+        },
+        {
+          "step": 5,
+          "val_bpb": 0.990152
+        },
+        {
+          "step": 6,
+          "val_bpb": 0.990813
+        },
+        {
+          "step": 7,
+          "val_bpb": 0.922597
+        }
+      ],
+      "best_val_bpb": 0.84696,
+      "first_val_bpb": 0.90516,
+      "total_training_runs": 8,
+      "successful_training_runs": 8,
+      "workspace_path": "/Users/emanuelerimoldi/Documents/GitHub/agent_parallelization/runs/experiment_pilot_d11_rep2/mode_parallel_shared/agent_1/workspace",
+      "results_path": "/Users/emanuelerimoldi/Documents/GitHub/agent_parallelization/runs/experiment_pilot_d11_rep2/mode_parallel_shared/agent_1/results",
+      "failed": false,
+      "failure_reason": ""
+    }
+  ]
+}
