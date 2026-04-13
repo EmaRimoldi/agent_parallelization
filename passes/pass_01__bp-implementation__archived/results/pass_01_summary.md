@@ -2,13 +2,43 @@
 
 **Status**: Archived
 **Period**: April 2026 (first AI pass)
-**Objective**: Establish baseline measurements for the BP framework's 2x2 experimental design and identify infrastructure issues before scaling.
+**Objective**: Build the experimental infrastructure and run a first pilot to test whether the Beneventano-Poggio (BP) four-term decomposition framework applies to LLM-driven autonomous agents.
 
 ---
 
+## Research Question
+
+Can we empirically measure how parallelism and memory affect the performance of autonomous LLM agents, and can the BP framework's mathematical decomposition explain the observed differences?
+
+**Background**: Beneventano and Poggio proposed a theoretical framework that decomposes the performance gain (or loss) of an agent configuration relative to a baseline into four interpretable terms:
+
+```
+Delta = log(kappa_0 / kappa) + phi + G - epsilon
+```
+
+where:
+- **log(kappa_0 / kappa)**: cost efficiency — does this configuration use fewer tokens/time per attempt?
+- **phi**: prior alignment — does the agent start with better initial guesses?
+- **G**: information gain — does the agent learn more from each observation (e.g., via memory)?
+- **epsilon**: coordination mismatch — does parallelism introduce routing inefficiency?
+
+This decomposition was developed for theoretical analysis. The question is whether it produces measurable, non-trivial terms when applied to real LLM agents running real ML tasks.
+
+**Experimental approach**: We use a 2x2 factorial design crossing parallelism (1 vs 2 agents) with memory (none vs external/shared), where the agents autonomously train CNNs on CIFAR-10. The baseline cell d00 (single agent, no memory) anchors the decomposition: each other cell's performance is decomposed into the four terms relative to d00.
+
+**Pass 01 goal**: Build the full instrumentation pipeline (token tracking, mode labeling, decomposition computation) and run a minimal pilot (3 reps per cell) to check whether (a) the infrastructure works end-to-end, (b) the decomposition terms are measurable above noise, and (c) any of six pre-registered hypotheses about parallelism and memory show consistent direction. This is explicitly a feasibility study, not a confirmatory experiment.
+
+**Six pre-registered hypotheses**:
+- **H1**: Parallelism helps wall-clock efficiency but not token efficiency (agents run faster but don't use fewer tokens)
+- **H2**: Memory helps on both axes (fewer tokens and less wall-clock time per improvement)
+- **H3**: Shared memory lowers coordination mismatch epsilon (agents avoid duplicating work)
+- **H4**: Parallelism is sensitive to coordination — epsilon exceeds log(2) when agents lack shared info
+- **H5**: Context pressure is the dominant cost driver — kappa increases monotonically as the agent's context fills up
+- **H6**: d11 (parallel + shared memory) dominates d00 on both token and wall-clock axes
+
 ## Experimental Design
 
-The BP framework decomposes agent performance via Delta = log(kappa_0/kappa) + phi + G - epsilon. Pass 01 tested a 2x2 factorial design crossing two axes:
+Pass 01 tested the 2x2 factorial design:
 
 |              | No Memory (0) | Memory (1)     |
 |--------------|---------------|----------------|
@@ -151,17 +181,31 @@ This study isolates CPU contention by running identical 2-second training tasks 
 
 **Figure 2 interpretation**: The left panel shows both policies diverge sharply from the ideal linear speedup after N=2, plateauing around 3x at N=8. The right panel reveals the cost: default-policy val_bpb degrades nearly linearly with N (~0.033 per doubling). The partitioned policy flattens the curve at N=2 (no quality loss) but converges with default at higher N, where there simply aren't enough cores per agent (1 core at N=8 vs 10 at N=1). The key takeaway is that for the pilot's N=2 (d01/d11), the contention penalty is real but modest (~2% val_bpb degradation with default policy, near-zero with partitioning). This means the d01/d11 quality gap vs d00/d10 in the pilot is partly but not entirely explained by contention — some signal may remain.
 
+## Answers to the Research Question
+
+**Can the BP decomposition produce measurable terms?** Partially. The cost term log(kappa_0/kappa) was measurable but noisy. The phi, G, and epsilon terms were all zero or near-zero in the pilot — the instrumentation for mode labeling and information gain did not produce enough signal at this scale. The decomposition reduced to a single-term approximation (cost only), which is too simple to be useful.
+
+**Hypothesis verdicts** (out of 3 reps supporting each):
+- H1 (parallelism helps wall-clock only): **1/3** — inconsistent
+- H2 (memory helps both axes): **1/3** — inconsistent
+- H3 (shared memory lowers epsilon): **0/3** — no support
+- H4 (parallelism sensitive to coordination): **0/3** — no support
+- H5 (context pressure dominant): **0/3** — no support (kappa data was sparse)
+- H6 (d11 dominates d00): **0/3** — no support
+
+**Negative result criterion**: R^2 = 0.32 for best_val_bpb ~ total_tokens, so the single-scalar fit does NOT explain the data. This means the decomposition is not redundant — there IS structure beyond "more tokens = better" — but the pilot was too noisy to extract it.
+
 ## Conclusions
 
-1. **Memory is the strongest single factor**: Adding memory to a single agent produced the best val_bpb (0.739 exploratory, 0.782 pilot mean), consistently outperforming no-memory counterparts.
+1. **Memory is the strongest single factor**: Adding memory to a single agent produced the best val_bpb (0.739 exploratory, 0.782 pilot mean), consistently outperforming no-memory counterparts. This aligns with H2's direction but was not statistically robust.
 
-2. **Parallelism introduces CPU contention**: On shared-CPU hardware, parallel agents compete for resources, degrading individual training quality. This is a confound that must be controlled in future passes.
+2. **Parallelism introduces CPU contention**: On shared-CPU hardware, parallel agents compete for resources, degrading individual training quality. This is a confound that must be controlled before any claim about parallelism can be made — the resource contention experiment quantified this at ~2% degradation for N=2.
 
 3. **The 2x2 design is viable but underpowered**: With only 3 reps per cell, variance is too high to draw inferential conclusions. The factorial structure is sound, but needs more repetitions and confound control.
 
 4. **d11 shows a stabilizing pattern**: Parallel + memory had the lowest variance (0.004), suggesting memory may help coordinate parallel agents, though the mechanism is unclear.
 
-5. **Infrastructure validated**: The experiment runner, config system, and analysis pipeline work end-to-end. Key bugs found: resource contention not controlled, training budget sensitivity.
+5. **Infrastructure validated**: The full pipeline works end-to-end: agent runner, token tracking, mode labeling, decomposition computation, and aggregation. Key issues found: resource contention not controlled, initial val_bpb not standardized across runs, phi/G/epsilon terms not yet producing signal.
 
 ## Implications for Later Passes
 
