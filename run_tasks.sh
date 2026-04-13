@@ -12,7 +12,7 @@
 # Prerequisites:
 #   - claude CLI (or codex CLI) installed and authenticated
 #   - Repository cloned and on the correct branch
-#   - IMPLEMENTATION_GUIDE.md and CPU_SUBSTRATE_GUIDE.md in repo root
+#   - docs/guides/IMPLEMENTATION_GUIDE.md and docs/guides/CPU_SUBSTRATE_GUIDE.md available in the repo
 #
 # What it does:
 #   1. Reads prompt files from ai_task_passes/pass_01_bp_implementation/

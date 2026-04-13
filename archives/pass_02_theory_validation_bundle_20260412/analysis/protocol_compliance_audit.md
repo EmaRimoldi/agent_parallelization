@@ -121,7 +121,7 @@ Interpretation:
 
 ### 5. Cost-axis mismatch is explicit in the implementation docs
 
-`IMPLEMENTATION_GUIDE.md` explicitly states:
+`docs/guides/IMPLEMENTATION_GUIDE.md` explicitly states:
 
 - `tau_cost` is measured in tokens, not dollars,
 - GPU cost is dropped from `kappa_cost`.

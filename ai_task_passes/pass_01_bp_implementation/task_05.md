@@ -1,6 +1,6 @@
 # Task 5: Implement d11 — parallel agents with shared memory
 
-Read `IMPLEMENTATION_GUIDE.md` → Task 5 for full specification.
+Read `docs/guides/IMPLEMENTATION_GUIDE.md` → Task 5 for full specification.
 
 ## What to do
 

@@ -1,6 +1,6 @@
 # Task 3: Add structured per-training-run wall-clock logging
 
-Read `IMPLEMENTATION_GUIDE.md` → Task 3 for full specification.
+Read `docs/guides/IMPLEMENTATION_GUIDE.md` → Task 3 for full specification.
 
 ## What to do
 

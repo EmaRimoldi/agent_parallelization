@@ -1,6 +1,6 @@
 # Task 7: Four-term decomposition estimators
 
-Read `IMPLEMENTATION_GUIDE.md` → Task 7 for full specification.
+Read `docs/guides/IMPLEMENTATION_GUIDE.md` → Task 7 for full specification.
 
 ## What to do
 

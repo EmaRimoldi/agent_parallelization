@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document is to be executed AFTER all Tasks (0–8) from `IMPLEMENTATION_GUIDE.md` are complete and committed. It has three phases: validate the instrumentation works end-to-end, run a miniature 2×2 pilot, and produce a first draft of results with the four-term decomposition.
+This document is to be executed AFTER all Tasks (0–8) from `docs/guides/IMPLEMENTATION_GUIDE.md` are complete and committed. It has three phases: validate the instrumentation works end-to-end, run a miniature 2×2 pilot, and produce a first draft of results with the four-term decomposition.
 
 ---
 

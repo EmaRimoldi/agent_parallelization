@@ -1,6 +1,6 @@
 # Task 4: Implement d10 — single agent with external memory
 
-Read `IMPLEMENTATION_GUIDE.md` → Task 4 for full specification.
+Read `docs/guides/IMPLEMENTATION_GUIDE.md` → Task 4 for full specification.
 
 ## What to do
 

@@ -1,6 +1,6 @@
 # Task 2: Add per-turn token and context tracking
 
-Read `IMPLEMENTATION_GUIDE.md` → Task 2 for full specification.
+Read `docs/guides/IMPLEMENTATION_GUIDE.md` → Task 2 for full specification.
 
 ## What to do
 

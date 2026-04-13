@@ -1,6 +1,6 @@
 # Task 8: Config routing, CPU worker scripts, and per-cell YAML configs
 
-Read `IMPLEMENTATION_GUIDE.md` → Task 8 and `CPU_SUBSTRATE_GUIDE.md` → "Compatibility with the framework" for full specification.
+Read `docs/guides/IMPLEMENTATION_GUIDE.md` → Task 8 and `docs/guides/CPU_SUBSTRATE_GUIDE.md` → "Compatibility with the framework" for full specification.
 
 ## What to do
 
@@ -27,7 +27,7 @@ Add a config flag `slurm.enabled` (default `true`). When `slurm.enabled: false`:
 - `run_on_worker.sh` should run `python train.py` directly (no SLURM), parse val_bpb from output, write `run.result`
 - `stop_gpu_worker.sh` should be a no-op
 
-Use the exact script contents from `CPU_SUBSTRATE_GUIDE.md` → "Worker scripts" section.
+Use the exact script contents from `docs/guides/CPU_SUBSTRATE_GUIDE.md` → "Worker scripts" section.
 
 ### 8c. Create per-cell YAML configs
 

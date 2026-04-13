@@ -1,6 +1,6 @@
 # Task 9: Validation and pilot experiment
 
-Read `PILOT_EXPERIMENT_PROTOCOL.md` for full specification. This is the final task.
+Read `docs/guides/PILOT_EXPERIMENT_PROTOCOL.md` for full specification. This is the final task.
 
 ## What to do
 

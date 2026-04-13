@@ -29,7 +29,7 @@ Produce a clean handoff package for a future reviewer / model / collaborator.
 Optional but recommended:
 
 - a short repository-root note:
-  `NEXT_REVIEWER_START_HERE.md`
+  `docs/handoffs/NEXT_REVIEWER_START_HERE.md`
 
 ## Completion Checklist
 

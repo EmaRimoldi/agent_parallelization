@@ -1,6 +1,6 @@
 # Task 6: Post-hoc mode labeling
 
-Read `IMPLEMENTATION_GUIDE.md` → Task 6 for full specification.
+Read `docs/guides/IMPLEMENTATION_GUIDE.md` → Task 6 for full specification.
 
 ## What to do
 

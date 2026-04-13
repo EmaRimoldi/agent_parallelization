@@ -266,7 +266,7 @@ This table is the main traceability map between AI passes and artifact families.
 ### Core theory bundle
 
 - [`archives/pass_02_theory_validation_bundle_20260412/README.md`](archives/pass_02_theory_validation_bundle_20260412/README.md)
-- [`NEXT_REVIEWER_START_HERE.md`](NEXT_REVIEWER_START_HERE.md)
+- [`docs/handoffs/NEXT_REVIEWER_START_HERE.md`](docs/handoffs/NEXT_REVIEWER_START_HERE.md)
 - revised theory PDF: [`archives/pass_02_theory_validation_bundle_20260412/theory/autoresearch_bp_revised.pdf`](archives/pass_02_theory_validation_bundle_20260412/theory/autoresearch_bp_revised.pdf)
 - original theory note: [`archives/pass_02_theory_validation_bundle_20260412/theory/autoresearch_bp.pdf`](archives/pass_02_theory_validation_bundle_20260412/theory/autoresearch_bp.pdf)
 - BP source paper: [`archives/pass_02_theory_validation_bundle_20260412/theory/BP.pdf`](archives/pass_02_theory_validation_bundle_20260412/theory/BP.pdf)
@@ -300,6 +300,8 @@ This table is the main traceability map between AI passes and artifact families.
 | [`autoresearch/`](autoresearch/) | CIFAR-10 CPU substrate and evaluation target |
 | [`configs/`](configs/) | YAML configs for `d00`, `d10`, `d01`, `d11` |
 | [`docs/`](docs/) | diagrams, figures, protocol notes, archive images |
+| [`docs/guides/`](docs/guides/) | implementation guide, substrate guide, and pilot protocol moved out of root |
+| [`docs/handoffs/`](docs/handoffs/) | reviewer-facing entry points and handoff notes moved out of root |
 | [`results/`](results/) | original pilot aggregate outputs |
 | [`runs/`](runs/) | raw smoke, pilot, and calibration experiment directories |
 | [`scripts/`](scripts/) | labeling, decomposition, experiment helpers |

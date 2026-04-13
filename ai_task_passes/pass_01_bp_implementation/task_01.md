@@ -1,6 +1,6 @@
 # Task 1: Fix model passthrough in agent runner
 
-Read `IMPLEMENTATION_GUIDE.md` → Task 1 for full specification.
+Read `docs/guides/IMPLEMENTATION_GUIDE.md` → Task 1 for full specification.
 
 ## What to do
 

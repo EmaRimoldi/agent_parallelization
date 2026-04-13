@@ -1,6 +1,6 @@
 # Task 0: Branch setup and CPU substrate
 
-You are implementing a series of modifications to the `agent_parallelization` repository. Read `IMPLEMENTATION_GUIDE.md` and `CPU_SUBSTRATE_GUIDE.md` in the repo root for full context.
+You are implementing a series of modifications to the `agent_parallelization` repository. Read `docs/guides/IMPLEMENTATION_GUIDE.md` and `docs/guides/CPU_SUBSTRATE_GUIDE.md` for full context.
 
 ## This task
 
@@ -9,7 +9,7 @@ You are implementing a series of modifications to the `agent_parallelization` re
 git checkout -b bp-2x2-instrumentation main
 ```
 
-2. Create the CIFAR-10 CPU training substrate as specified in `CPU_SUBSTRATE_GUIDE.md`. Specifically:
+2. Create the CIFAR-10 CPU training substrate as specified in `docs/guides/CPU_SUBSTRATE_GUIDE.md`. Specifically:
    - Create `autoresearch/prepare.py` with the exact content from the guide
    - Create `autoresearch/train.py` with the exact content from the guide
    - Create `autoresearch/program.md` with the content from the guide
