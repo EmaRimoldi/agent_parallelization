@@ -15,7 +15,8 @@
 #   - IMPLEMENTATION_GUIDE.md and CPU_SUBSTRATE_GUIDE.md in repo root
 #
 # What it does:
-#   1. Reads prompt files from tasks/ directory (task_01.md, task_02.md, ...)
+#   1. Reads prompt files from ai_task_passes/pass_01_bp_implementation/
+#      (task_01.md, task_02.md, ...)
 #   2. For each task, invokes the agent CLI in the repo directory
 #   3. Waits for completion
 #   4. Logs stdout/stderr to logs/task_XX.log
@@ -27,7 +28,8 @@
 set -euo pipefail
 
 # ─── Config ──────────────────────────────────────────────────────────
-TASKS_DIR="tasks"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TASKS_DIR="$ROOT_DIR/ai_task_passes/pass_01_bp_implementation"
 LOGS_DIR="logs/task_runner"
 AGENT="claude"
 START_FROM=1

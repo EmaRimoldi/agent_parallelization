@@ -1,8 +1,8 @@
-# BP 2×2 Instrumentation on AutoResearch
+# BP 2x2 Instrumentation on AutoResearch
 
-This repository is the working implementation and evidence bundle for a BP-style decomposition study on autonomous coding agents.
+This repository is the code, experiment archive, and theory bundle for a BP-style decomposition study on autonomous coding agents.
 
-The research question is whether AutoResearch-style agent architectures can be analyzed through the Beneventano-Poggio decomposition
+The central research question is whether AutoResearch-style agent architectures can be analyzed through a BP decomposition of the form
 
 ```math
 \Delta = \log(\kappa_0 / \kappa) + \phi + G - \epsilon
@@ -14,21 +14,47 @@ under a controlled CPU substrate, deterministic evaluation, structured instrumen
 
 As of **April 13, 2026**, the repository contains:
 
-- a complete **deterministic Phase 02 calibration** on `d00` vs `d10`;
+- a complete first AI pass that built the substrate, instrumentation, memory/parallel modes, and original 2x2 pilot;
+- a complete second AI pass task queue for theory formalization and protocol repair;
 - a full theory-validation bundle in [`theory_validation_bp_20260412/`](theory_validation_bp_20260412/);
-- corrected instrumentation, reevaluation logging, and mode-labeling infrastructure;
-- an **exploratory** `d01` / `d11` full 2×2 run launched after calibration.
+- a complete deterministic Phase 02 calibration on `d00` vs `d10`;
+- an **ongoing / exploratory** second-pass continuation into `d01` / `d11`.
 
-Important: the calibration evidence currently supports a **split interpretation**:
+The current empirical reading remains split:
 
-- the descriptive **best-of-rep** view suggests a medium difference, but in the wrong direction for `d10`;
-- the stricter **all-runs + accepted-mode** gate remains effectively negative and points to `structured_search` rather than a clean `proceed`.
+- the original pilot plus reevaluation still make the framework interesting;
+- the stricter calibration gate remains weak and currently points to `structured_search` rather than a clean `proceed`;
+- the second pass is therefore best read as **theory-tightening plus exploratory continuation**, not as a final theorem validation.
 
-So the `d01` / `d11` run should be read as a **manual exploratory override**, not as a gate-qualified next phase.
+## AI Task Passes
+
+The repository is now organized around two major AI task passes:
+
+| Pass | Folder | What it owns |
+| --- | --- | --- |
+| Pass 01 | [`ai_task_passes/pass_01_bp_implementation/`](ai_task_passes/pass_01_bp_implementation/) | initial buildout, instrumentation, substrate, original pilot |
+| Pass 02 | [`ai_task_passes/pass_02_theory_formalization/`](ai_task_passes/pass_02_theory_formalization/) | theorem refactor, protocol upgrades, estimator repair, follow-up experiments, reviewer bundle |
+
+Index:
+
+- unified pass index: [`ai_task_passes/README.md`](ai_task_passes/README.md)
+- pass 01 task queue: [`ai_task_passes/pass_01_bp_implementation/README.md`](ai_task_passes/pass_01_bp_implementation/README.md)
+- pass 02 task queue: [`ai_task_passes/pass_02_theory_formalization/README.md`](ai_task_passes/pass_02_theory_formalization/README.md)
+- canonical pass 02 runner: [`ai_task_passes/run_pass_02_theory_formalization.sh`](ai_task_passes/run_pass_02_theory_formalization.sh)
+
+## Experiment Flow
+
+This is the repository-level flow of what has been done so far:
+
+![Experiment archive flow](docs/figures/experiment_archive_flow.png)
+
+And this is the compact numerical summary of the main experiment families:
+
+![Experiment archive summary](docs/figures/experiment_archive_summary.png)
 
 ## Experimental Design
 
-The 2×2 design is:
+The core 2x2 design is:
 
 | Cell | Agents | Memory | Intended BP reading |
 | --- | --- | --- | --- |
@@ -41,11 +67,132 @@ The current substrate is a **CPU-only CIFAR-10 optimization task**:
 
 - agents may modify [`autoresearch/train.py`](autoresearch/train.py);
 - [`autoresearch/prepare.py`](autoresearch/prepare.py) is fixed;
-- the optimization target is `val_bpb` / validation loss proxy;
-- evaluation was made deterministic before calibration;
-- agent turns, training runs, reevaluations, and mode labels are logged.
+- the target metric is `val_bpb` / validation-loss proxy;
+- evaluation was later made deterministic for the calibration workflow;
+- turns, training runs, reevaluations, context pressure, and mode labels are logged.
 
-## Workflow Phases
+## Experiment Archive
+
+This section is the top-level archive of the experiment families recorded in this repository.
+
+### 0. Pre-pilot smoke and bring-up
+
+These are short validation runs created during the first AI pass to prove that the substrate and all four modes could launch.
+
+| Family | Raw paths | Count | Notes |
+| --- | --- | ---: | --- |
+| baseline smoke | `runs/experiment_exp_20260411_190921` through `runs/experiment_exp_20260411_194616` | 5 | `single_long`, 10-minute sessions |
+| memory smoke | `runs/experiment_exp_20260411_195625` | 1 | `single_memory`, 10-minute session |
+| parallel smoke | `runs/experiment_exp_20260411_200635` | 1 | `parallel`, 2 agents |
+| shared-memory smoke | `runs/experiment_exp_20260411_201635` | 1 | `parallel_shared`, 2 agents |
+
+These runs belong to **Pass 01** and exist mainly to validate launchability, config routing, and raw artifact creation.
+
+### 1. Pass 01 main experiment: original 2x2 pilot
+
+This is the original 2x2 pilot produced by the first AI pass.
+
+#### Raw pilot runs
+
+| Cell | Raw run directories |
+| --- | --- |
+| `d00` | `runs/experiment_pilot_d00_rep1` to `runs/experiment_pilot_d00_rep3` |
+| `d10` | `runs/experiment_pilot_d10_rep1` to `runs/experiment_pilot_d10_rep3` |
+| `d01` | `runs/experiment_pilot_d01_rep1` to `runs/experiment_pilot_d01_rep3` |
+| `d11` | `runs/experiment_pilot_d11_rep1` to `runs/experiment_pilot_d11_rep3` |
+
+#### Canonical pass-01 outputs
+
+- pilot summary: [`results/pilot_summary.md`](results/pilot_summary.md)
+- raw pilot aggregate: [`results/pilot_raw_data.json`](results/pilot_raw_data.json)
+- raw-to-cell mapping: [`runs/pilot_mapping.json`](runs/pilot_mapping.json)
+- original pilot decomposition copies:
+  [`results/decomposition_rep1.json`](results/decomposition_rep1.json),
+  [`results/decomposition_rep2.json`](results/decomposition_rep2.json),
+  [`results/decomposition_rep3.json`](results/decomposition_rep3.json)
+- original pilot figures:
+  [`results/pilot_figures/`](results/pilot_figures/)
+
+#### Pilot snapshot
+
+| Cell | Mean training runs per rep | Best val_bpb | Total tokens | Mean wall-clock / attempt |
+| --- | ---: | ---: | ---: | ---: |
+| `d00` | `5.00 +/- 2.94` | `0.81 +/- 0.01` | `40974 +/- 5106` | `136.29s +/- 0.24` |
+| `d10` | `5.33 +/- 2.62` | `0.78 +/- 0.03` | `41835 +/- 5007` | `135.78s +/- 0.18` |
+| `d01` | `12.67 +/- 3.86` | `0.82 +/- 0.01` | `85060 +/- 10165` | `151.04s +/- 19.89` |
+| `d11` | `13.33 +/- 3.30` | `0.80 +/- 0.00` | `75628 +/- 10217` | `137.44s +/- 0.81` |
+
+This pass established the first version of the artifact stack, but the decomposition was still degenerate because `phi`, `G`, and `epsilon` were not yet properly identified.
+
+Pilot figure example:
+
+![Original pilot decomposition](results/pilot_figures/decomposition_bar_chart.png)
+
+### 2. Pass 02 theory-validation follow-ups
+
+These are the targeted experiments introduced by the second AI pass after the pilot was judged too optimistic / too weakly identified.
+
+#### Canonical pass-02 experiment folders
+
+| Follow-up experiment | Main path | Purpose |
+| --- | --- | --- |
+| noise assay | [`theory_validation_bp_20260412/experiments/noise_assay/`](theory_validation_bp_20260412/experiments/noise_assay/) | test verifier noise and best-of-N optimism |
+| repeated incumbent means | [`theory_validation_bp_20260412/experiments/followup_01/replicated_means/`](theory_validation_bp_20260412/experiments/followup_01/replicated_means/) | reevaluate selected candidates from all four cells |
+| cost variance / Jensen analysis | [`theory_validation_bp_20260412/experiments/followup_01/cost_variance_summary.json`](theory_validation_bp_20260412/experiments/followup_01/cost_variance_summary.json) | quantify Jensen-gap risk |
+| context-pressure feasibility | [`theory_validation_bp_20260412/experiments/followup_01/context_sweep_feasibility.json`](theory_validation_bp_20260412/experiments/followup_01/context_sweep_feasibility.json) | test whether H5 is even reachable |
+| protocol smoke | [`theory_validation_bp_20260412/artifacts/protocol_smoke/`](theory_validation_bp_20260412/artifacts/protocol_smoke/) | validate upgraded reevaluation / provenance path |
+
+#### Canonical pass-02 summaries
+
+- bundle README: [`theory_validation_bp_20260412/README.md`](theory_validation_bp_20260412/README.md)
+- final verdict: [`theory_validation_bp_20260412/analysis/final_verdict.md`](theory_validation_bp_20260412/analysis/final_verdict.md)
+- reanalysis summary: [`theory_validation_bp_20260412/analysis/reanalysis_summary.md`](theory_validation_bp_20260412/analysis/reanalysis_summary.md)
+- protocol compliance audit: [`theory_validation_bp_20260412/analysis/protocol_compliance_audit.md`](theory_validation_bp_20260412/analysis/protocol_compliance_audit.md)
+- revised theory PDF: [`autoresearch_bp_revised.pdf`](autoresearch_bp_revised.pdf)
+
+#### Follow-up snapshot
+
+Repeated incumbent reevaluation after protocol upgrades:
+
+| Cell | Mean val_bpb | 95% CI |
+| --- | ---: | --- |
+| `d00` | `0.8739` | `[0.8512, 0.8967]` |
+| `d10` | `0.8412` | `[0.8096, 0.8729]` |
+| `d01` | `0.9008` | `[0.8313, 0.9703]` |
+| `d11` | `0.8737` | `[0.8280, 0.9194]` |
+
+Noise assay:
+
+| Candidate | Mean val_bpb | Std | Range |
+| --- | ---: | ---: | ---: |
+| baseline | `0.8246` | `0.0359` | `0.0930` |
+| pilot-selected best `d10` | `0.8694` | `0.0501` | `0.1198` |
+
+Jensen-gap summary:
+
+| Cell | Token Jensen gap | Wall Jensen gap |
+| --- | ---: | ---: |
+| `d00` | `0.0220` | `0.2156` |
+| `d10` | `0.0458` | `0.2089` |
+| `d01` | `0.0350` | `0.2691` |
+| `d11` | `0.0395` | `0.2560` |
+
+Context-pressure feasibility:
+
+| Cell | Current max fill | Multiplier to 50% fill |
+| --- | ---: | ---: |
+| `d00` | `0.2283` | `2.19x` |
+| `d10` | `0.2173` | `2.30x` |
+| `d01` | `0.2426` | `2.06x` |
+| `d11` | `0.2115` | `2.36x` |
+
+This pass is what changed the interpretation from “pilot looked promising” to “the theorem is cleaner, but the evidence is still not rigorous enough.”
+
+### 3. Pass 02 workflow calibration and current second-pass exploration
+
+The second AI pass also owns the later workflowized calibration and current continuation work under [`workflow/`](workflow/).
+
+#### Workflow phases
 
 The workflow DAG lives under [`workflow/phases/`](workflow/phases/).
 
@@ -55,55 +202,64 @@ The workflow DAG lives under [`workflow/phases/`](workflow/phases/).
 | `01_*` | make evaluation deterministic | deterministic substrate |
 | `02_power_calibration` | calibrate `d00` vs `d10` | effect size, diversity, cost variance |
 | `02a_analyze_calibration` | aggregate calibration evidence | analysis JSON + summary |
-| `02b_decision_gate` | choose proceed / extend / escalate / structured search | workflow decision |
-| `03_*` | full 2×2 experiment and decomposition | `d00/d10/d01/d11` comparison |
-| `04_escalation_cifar100` | harder substrate fallback | CIFAR-100 branch |
-| `05_structured_search` | structured-search fallback | exact mode mapping |
-| `06_theorem_update` | revise theorem from evidence | updated theorem note |
-| `07_final_report` | final package / report | handoff-ready bundle |
+| `02b_decision_gate` | choose proceed / extend / structured search | workflow decision |
+| `03_*` | full 2x2 continuation and decomposition | currently second-pass exploratory continuation |
 
-## Preliminary Results
+#### Raw calibration runs
 
-The stable calibration artifacts are:
+| Cell | Raw run directories |
+| --- | --- |
+| `d00` | `runs/experiment_calibration_d00_rep1` to `runs/experiment_calibration_d00_rep5` |
+| `d10` | `runs/experiment_calibration_d10_rep1` to `runs/experiment_calibration_d10_rep5` |
+| `d01` | currently archived snapshot includes `runs/experiment_calibration_d01_rep1` |
+| `d11` | second-pass continuation target, but not yet represented in the stable tracked archive snapshot |
 
-- descriptive report: [`workflow/artifacts/analysis-report.md`](workflow/artifacts/analysis-report.md)
-- statistical appendix: [`workflow/artifacts/stats-appendix.md`](workflow/artifacts/stats-appendix.md)
-- stricter rerun with current labeling: [`workflow/artifacts/calibration_analysis_current.json`](workflow/artifacts/calibration_analysis_current.json)
-- workflow gate rationale: [`workflow/artifacts/decision_gate_rationale.md`](workflow/artifacts/decision_gate_rationale.md)
+#### Canonical workflow artifacts
 
-### Calibration Snapshot
+- workflow state: [`workflow/state.json`](workflow/state.json)
+- descriptive calibration report: [`workflow/artifacts/analysis-report.md`](workflow/artifacts/analysis-report.md)
+- strict current calibration JSON: [`workflow/artifacts/calibration_analysis_current.json`](workflow/artifacts/calibration_analysis_current.json)
+- run index: [`workflow/artifacts/calibration_runs.json`](workflow/artifacts/calibration_runs.json)
+- decision rationale: [`workflow/artifacts/decision_gate_rationale.md`](workflow/artifacts/decision_gate_rationale.md)
+- session notes / handoff: [`workflow/artifacts/codex_session_notes.md`](workflow/artifacts/codex_session_notes.md)
+- figure pack: [`workflow/artifacts/figures/`](workflow/artifacts/figures/)
+
+#### Calibration snapshot
 
 | Metric | `d00` | `d10` | Reading |
 | --- | ---: | ---: | --- |
-| Best-of-rep mean | `0.8905` | `0.9151` | `d10` not better |
-| All-runs mean | `1.0026` | `1.0127` | negligible quality gap |
-| Total runs | `47` | `69` | `d10` iterates faster |
-| Mean runs / rep | `9.4` | `13.8` | throughput advantage for `d10` |
-| Modes with `>=2` accepted edits | `1` | `1` | still degenerate for theorem ID |
+| best-of-rep mean | `0.8905` | `0.9151` | descriptive view still does not favor `d10` |
+| all-runs mean | `1.0026` | `1.0127` | negligible quality gap |
+| total runs | `47` | `69` | `d10` iterates faster |
+| distinct accepted modes | `3` | `2` | still sparse |
+| modes with `>=2` accepted edits | `1` | `1` | theorem identification still weak |
+| wall Jensen gap | `0.1962` | `0.1478` | cost regularization signal exists |
 
-### Visual Snapshot
+Important note:
 
-#### Quality
+- `workflow/state.json` still records a `proceed` decision from the descriptive workflow branch;
+- the stricter later reanalysis in [`workflow/artifacts/calibration_analysis_current.json`](workflow/artifacts/calibration_analysis_current.json) is the better current reading and points to `structured_search`;
+- the `d01` / `d11` continuation should therefore be read as a **second-pass exploratory override**, not as a gate-qualified continuation.
 
-![Phase 02 quality snapshot](docs/figures/phase02_quality.svg)
+Workflow figure example:
 
-#### Search Behavior
+![Phase 02 main comparison](workflow/artifacts/figures/figure-01-main-comparison.png)
 
-![Phase 02 behavior snapshot](docs/figures/phase02_behavior.svg)
+## Pass-to-Experiment / Result Mapping
 
-#### Decision Split
+This table is the main traceability map between AI passes and artifact families.
 
-![Phase 02 gate snapshot](docs/figures/phase02_gate.svg)
-
-### Current Read
-
-The most honest current summary is:
-
-- memory improved **iteration throughput**;
-- memory did **not** show a convincing quality advantage on calibration;
-- accepted-mode structure is still too thin to claim empirical identification of the full `phi + G - epsilon` package;
-- the strict gate still favors **structured search** as the clean next step;
-- the `d01` / `d11` run is still worth collecting as exploratory evidence.
+| Artifact family | AI pass | Why it exists | Canonical locations |
+| --- | --- | --- | --- |
+| substrate + training target | Pass 01 | create the CPU CIFAR-10 task | [`autoresearch/`](autoresearch/) |
+| instrumentation + memory / parallel modes | Pass 01 | make BP-style logging and 2x2 routing possible | [`src/`](src/), [`configs/`](configs/), [`scripts/`](scripts/) |
+| smoke bring-up runs | Pass 01 | validate all modes can launch | `runs/experiment_exp_*` |
+| original 2x2 pilot | Pass 01 | first end-to-end empirical pass | `runs/experiment_pilot_*`, [`results/`](results/) |
+| theorem audits and revised PDF | Pass 02 | tighten the theorem after pilot weaknesses | [`theory_validation_bp_20260412/analysis/`](theory_validation_bp_20260412/analysis/), [`autoresearch_bp_revised.pdf`](autoresearch_bp_revised.pdf) |
+| protocol / estimator upgrades | Pass 02 | repair logging, reevaluation, and decomposition logic | [`theory_validation_bp_20260412/code/`](theory_validation_bp_20260412/code/), [`scripts/`](scripts/) |
+| noise assay and reevaluation | Pass 02 | test selection bias and candidate stability | [`theory_validation_bp_20260412/experiments/`](theory_validation_bp_20260412/experiments/) |
+| workflowized calibration | Pass 02 | put calibration and gating on rails | [`workflow/`](workflow/), `runs/experiment_calibration_*` |
+| current second-pass continuation | Pass 02 | continue exploration after weak gate evidence | current `workflow/` phase 03 state and archived `runs/experiment_calibration_d01_rep1` snapshot |
 
 ## Where To Look
 
@@ -114,6 +270,12 @@ The most honest current summary is:
 - revised theory PDF: [`autoresearch_bp_revised.pdf`](autoresearch_bp_revised.pdf)
 - original theory note: [`autoresearch_bp.pdf`](autoresearch_bp.pdf)
 - BP source paper: [`BP.pdf`](BP.pdf)
+
+### AI task queues
+
+- unified index: [`ai_task_passes/README.md`](ai_task_passes/README.md)
+- pass 01 tasks: [`ai_task_passes/pass_01_bp_implementation/`](ai_task_passes/pass_01_bp_implementation/)
+- pass 02 tasks: [`ai_task_passes/pass_02_theory_formalization/`](ai_task_passes/pass_02_theory_formalization/)
 
 ### Workflow and experiment state
 
@@ -130,64 +292,24 @@ The most honest current summary is:
 - mode labeling: [`scripts/label_modes.py`](scripts/label_modes.py)
 - decomposition: [`scripts/compute_decomposition.py`](scripts/compute_decomposition.py)
 
-### Substrate and configs
-
-- substrate guide: [`CPU_SUBSTRATE_GUIDE.md`](CPU_SUBSTRATE_GUIDE.md)
-- implementation guide: [`IMPLEMENTATION_GUIDE.md`](IMPLEMENTATION_GUIDE.md)
-- training substrate: [`autoresearch/`](autoresearch/)
-- experiment configs: [`configs/`](configs/)
-
-### Generated evidence
-
-- completed runs are under `runs/` locally, but this directory is git-ignored for new experiment outputs;
-- stable summary artifacts are intentionally copied into `workflow/artifacts/` and `theory_validation_bp_20260412/`.
-
 ## Repository Map
 
 | Path | What it contains |
 | --- | --- |
+| [`ai_task_passes/`](ai_task_passes/) | unified archive of the two AI task passes |
 | [`autoresearch/`](autoresearch/) | CIFAR-10 CPU substrate and evaluation target |
 | [`configs/`](configs/) | YAML configs for `d00`, `d10`, `d01`, `d11` |
-| [`docs/`](docs/) | diagrams, protocol notes, README figures |
+| [`docs/`](docs/) | diagrams, figures, protocol notes, archive images |
+| [`results/`](results/) | original pilot aggregate outputs |
+| [`runs/`](runs/) | raw smoke, pilot, and calibration experiment directories |
 | [`scripts/`](scripts/) | labeling, decomposition, experiment helpers |
 | [`src/`](src/) | experiment engine and instrumentation |
-| [`tasks/`](tasks/) | implementation task queue used for the buildout |
-| [`theory_formalization_tasks/`](theory_formalization_tasks/) | later theory-refinement queue and prompt |
 | [`theory_validation_bp_20260412/`](theory_validation_bp_20260412/) | self-contained validation and reviewer bundle |
-| [`workflow/`](workflow/) | DAG, orchestration helpers, calibration artifacts, decision notes |
-
-## Key Documents
-
-- reviewer handoff: [`NEXT_REVIEWER_START_HERE.md`](NEXT_REVIEWER_START_HERE.md)
-- final verdict: [`theory_validation_bp_20260412/analysis/final_verdict.md`](theory_validation_bp_20260412/analysis/final_verdict.md)
-- reanalysis summary: [`theory_validation_bp_20260412/analysis/reanalysis_summary.md`](theory_validation_bp_20260412/analysis/reanalysis_summary.md)
-- estimator design: [`theory_validation_bp_20260412/analysis/estimator_design.md`](theory_validation_bp_20260412/analysis/estimator_design.md)
-- protocol compliance audit: [`theory_validation_bp_20260412/analysis/protocol_compliance_audit.md`](theory_validation_bp_20260412/analysis/protocol_compliance_audit.md)
-
-## Framework CLI
-
-The engine still supports the underlying experiment modes:
-
-```bash
-# single control
-run-single-long --config configs/experiment_d00.yaml
-
-# single agent with external memory
-python workflow/scripts/run_calibration.py --repo-root . --cells d10 --reps 1
-
-# parallel no-sharing
-run-parallel --config configs/experiment_d01.yaml
-
-# parallel shared-memory
-python -m agent_parallelization_new.launcher --help
-```
-
-For the current research workflow, prefer the scripted workflow in [`workflow/`](workflow/) over the older ad hoc commands.
+| [`workflow/`](workflow/) | later workflow DAG, calibration artifacts, decision notes |
 
 ## Notes
 
-- Determinism was a major turning point: without it, the whole decomposition study was dominated by evaluation noise.
-- The revised theorem is intentionally narrower than the original note.
-- The most useful next milestone remains either:
-  - a clean structured-search interface, or
-  - a successful `d01` / `d11` exploratory result strong enough to justify revisiting the gate logic.
+- The repository now treats **task passes** as first-class archival structure.
+- Pass 01 owns the original implementation and pilot.
+- Pass 02 owns the theorem cleanup, targeted follow-ups, workflow calibration, and ongoing second-pass exploration.
+- The strict current conclusion is still: **promising but not yet rigorous**.

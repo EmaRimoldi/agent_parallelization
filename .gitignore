@@ -13,7 +13,8 @@ runs/
 results/
 autoresearch/data/
 workflow/logs/
-theory_formalization_tasks/.runner_state/
+ai_task_passes/pass_02_theory_formalization/.runner_state/
+logs/task_runner/
 theory_validation_bp_20260412/theory/*.aux
 theory_validation_bp_20260412/theory/*.log
 theory_validation_bp_20260412/theory/*.out

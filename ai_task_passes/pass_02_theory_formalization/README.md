@@ -1,6 +1,6 @@
-# Theory Formalization Task Queue
+# Pass 02: Theory Formalization Task Queue
 
-This directory is a sequential work queue for turning the current AutoResearch BP theory into a theorem that is both mathematically and experimentally defensible.
+This directory is the second AI task pass. It is a sequential work queue for turning the current AutoResearch BP theory into a theorem that is both mathematically and experimentally defensible.
 
 ## Purpose
 
@@ -41,18 +41,18 @@ The tasks are intentionally ordered and should be executed sequentially:
 - `task_06_finalize_bundle.md`
 - `PROMPT_FOR_CODEX.md`
 
-## Runner
+## Canonical Runner
 
-Use the repository-root runner:
+Use the canonical pass runner:
 
 ```bash
-./run_theory_formalization_tasks.sh start
+./ai_task_passes/run_pass_02_theory_formalization.sh start
 ```
 
 After finishing each task:
 
 ```bash
-./run_theory_formalization_tasks.sh complete "short completion note"
+./ai_task_passes/run_pass_02_theory_formalization.sh complete "short completion note"
 ```
 
 The runner will automatically advance to the next Markdown file and print it.
@@ -60,12 +60,16 @@ The runner will automatically advance to the next Markdown file and print it.
 Useful commands:
 
 ```bash
-./run_theory_formalization_tasks.sh status
-./run_theory_formalization_tasks.sh current
-./run_theory_formalization_tasks.sh show
-./run_theory_formalization_tasks.sh list
-./run_theory_formalization_tasks.sh reset --force
+./ai_task_passes/run_pass_02_theory_formalization.sh status
+./ai_task_passes/run_pass_02_theory_formalization.sh current
+./ai_task_passes/run_pass_02_theory_formalization.sh show
+./ai_task_passes/run_pass_02_theory_formalization.sh list
+./ai_task_passes/run_pass_02_theory_formalization.sh reset --force
 ```
+
+Compatibility note:
+
+- `./run_theory_formalization_tasks.sh ...` still works as a thin wrapper, but the canonical path now lives under `ai_task_passes/`.
 
 ## Completion Rule
 

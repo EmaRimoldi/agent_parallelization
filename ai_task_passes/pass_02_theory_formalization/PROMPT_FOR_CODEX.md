@@ -7,15 +7,15 @@ You are in the `agent_parallelization` repository.
 
 Your job is to execute the theory-formalization queue stored in:
 
-`theory_formalization_tasks/`
+`ai_task_passes/pass_02_theory_formalization/`
 
 Rules:
 
 1. You must process the task files sequentially.
 2. You must use the repository runner:
-   - `./run_theory_formalization_tasks.sh start`
-   - `./run_theory_formalization_tasks.sh show`
-   - `./run_theory_formalization_tasks.sh complete "short note"`
+   - `./ai_task_passes/run_pass_02_theory_formalization.sh start`
+   - `./ai_task_passes/run_pass_02_theory_formalization.sh show`
+   - `./ai_task_passes/run_pass_02_theory_formalization.sh complete "short note"`
 3. Do not skip tasks.
 4. Do not mark a task complete until every deliverable in that Markdown file exists and its checklist is satisfied.
 5. After completing one task, immediately advance to the next using the runner.
@@ -26,21 +26,21 @@ Rules:
 Workflow:
 
 1. Run:
-   `./run_theory_formalization_tasks.sh start`
+   `./ai_task_passes/run_pass_02_theory_formalization.sh start`
 2. Read the current task the runner prints.
 3. Execute the task fully.
 4. Validate that all deliverables exist.
 5. Mark it complete:
-   `./run_theory_formalization_tasks.sh complete "what was done"`
+   `./ai_task_passes/run_pass_02_theory_formalization.sh complete "what was done"`
 6. The runner will print the next task automatically.
 7. Repeat until the runner says all tasks are complete.
 
 Useful commands:
 
-- `./run_theory_formalization_tasks.sh status`
-- `./run_theory_formalization_tasks.sh current`
-- `./run_theory_formalization_tasks.sh show`
-- `./run_theory_formalization_tasks.sh list`
+- `./ai_task_passes/run_pass_02_theory_formalization.sh status`
+- `./ai_task_passes/run_pass_02_theory_formalization.sh current`
+- `./ai_task_passes/run_pass_02_theory_formalization.sh show`
+- `./ai_task_passes/run_pass_02_theory_formalization.sh list`
 
 Priority guidance:
 
