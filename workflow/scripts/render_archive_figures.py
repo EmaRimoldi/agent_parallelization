@@ -306,6 +306,7 @@ def render_flow(smoke_count: int) -> None:
         "Top-level README archive\n"
         "theory_validation_bp_20260412/\n"
         "workflow/artifacts/\n"
+        "theory_validation_bp_20260412/theory/\n"
         "autoresearch_bp_revised.pdf\n\n"
         "This is the stable handoff package.",
         COLORS["bundle"],

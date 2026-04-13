@@ -41,7 +41,7 @@ At minimum:
 
 - updated `theory_validation_bp_20260412/theory/autoresearch_bp_revised.tex`
 - regenerated `theory_validation_bp_20260412/theory/autoresearch_bp_revised.pdf`
-- updated root copy `autoresearch_bp_revised.pdf`
+- no duplicate root copy; the canonical PDF remains inside `theory_validation_bp_20260412/theory/`
 - new note `theory_validation_bp_20260412/analysis/theorem_refactor_summary.md`
 
 The summary note must say:

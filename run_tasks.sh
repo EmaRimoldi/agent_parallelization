@@ -19,7 +19,7 @@
 #      (task_01.md, task_02.md, ...)
 #   2. For each task, invokes the agent CLI in the repo directory
 #   3. Waits for completion
-#   4. Logs stdout/stderr to logs/task_XX.log
+#   4. Logs stdout/stderr to ai_task_passes/pass_01_bp_implementation/logs/task_runner/task_XX.log
 #   5. Checks exit code — stops on failure unless --continue-on-error
 #   6. Commits changes after each successful task
 #   7. Moves to next task
@@ -30,7 +30,7 @@ set -euo pipefail
 # ─── Config ──────────────────────────────────────────────────────────
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TASKS_DIR="$ROOT_DIR/ai_task_passes/pass_01_bp_implementation"
-LOGS_DIR="logs/task_runner"
+LOGS_DIR="$ROOT_DIR/ai_task_passes/pass_01_bp_implementation/logs/task_runner"
 AGENT="claude"
 START_FROM=1
 DRY_RUN=false

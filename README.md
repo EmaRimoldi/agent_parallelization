@@ -148,7 +148,7 @@ These are the targeted experiments introduced by the second AI pass after the pi
 - final verdict: [`theory_validation_bp_20260412/analysis/final_verdict.md`](theory_validation_bp_20260412/analysis/final_verdict.md)
 - reanalysis summary: [`theory_validation_bp_20260412/analysis/reanalysis_summary.md`](theory_validation_bp_20260412/analysis/reanalysis_summary.md)
 - protocol compliance audit: [`theory_validation_bp_20260412/analysis/protocol_compliance_audit.md`](theory_validation_bp_20260412/analysis/protocol_compliance_audit.md)
-- revised theory PDF: [`autoresearch_bp_revised.pdf`](autoresearch_bp_revised.pdf)
+- revised theory PDF: [`theory_validation_bp_20260412/theory/autoresearch_bp_revised.pdf`](theory_validation_bp_20260412/theory/autoresearch_bp_revised.pdf)
 
 #### Follow-up snapshot
 
@@ -255,7 +255,7 @@ This table is the main traceability map between AI passes and artifact families.
 | instrumentation + memory / parallel modes | Pass 01 | make BP-style logging and 2x2 routing possible | [`src/`](src/), [`configs/`](configs/), [`scripts/`](scripts/) |
 | smoke bring-up runs | Pass 01 | validate all modes can launch | `runs/experiment_exp_*` |
 | original 2x2 pilot | Pass 01 | first end-to-end empirical pass | `runs/experiment_pilot_*`, [`results/`](results/) |
-| theorem audits and revised PDF | Pass 02 | tighten the theorem after pilot weaknesses | [`theory_validation_bp_20260412/analysis/`](theory_validation_bp_20260412/analysis/), [`autoresearch_bp_revised.pdf`](autoresearch_bp_revised.pdf) |
+| theorem audits and revised PDF | Pass 02 | tighten the theorem after pilot weaknesses | [`theory_validation_bp_20260412/analysis/`](theory_validation_bp_20260412/analysis/), [`theory_validation_bp_20260412/theory/autoresearch_bp_revised.pdf`](theory_validation_bp_20260412/theory/autoresearch_bp_revised.pdf) |
 | protocol / estimator upgrades | Pass 02 | repair logging, reevaluation, and decomposition logic | [`theory_validation_bp_20260412/code/`](theory_validation_bp_20260412/code/), [`scripts/`](scripts/) |
 | noise assay and reevaluation | Pass 02 | test selection bias and candidate stability | [`theory_validation_bp_20260412/experiments/`](theory_validation_bp_20260412/experiments/) |
 | workflowized calibration | Pass 02 | put calibration and gating on rails | [`workflow/`](workflow/), `runs/experiment_calibration_*` |
@@ -267,9 +267,9 @@ This table is the main traceability map between AI passes and artifact families.
 
 - [`theory_validation_bp_20260412/README.md`](theory_validation_bp_20260412/README.md)
 - [`NEXT_REVIEWER_START_HERE.md`](NEXT_REVIEWER_START_HERE.md)
-- revised theory PDF: [`autoresearch_bp_revised.pdf`](autoresearch_bp_revised.pdf)
-- original theory note: [`autoresearch_bp.pdf`](autoresearch_bp.pdf)
-- BP source paper: [`BP.pdf`](BP.pdf)
+- revised theory PDF: [`theory_validation_bp_20260412/theory/autoresearch_bp_revised.pdf`](theory_validation_bp_20260412/theory/autoresearch_bp_revised.pdf)
+- original theory note: [`theory_validation_bp_20260412/theory/autoresearch_bp.pdf`](theory_validation_bp_20260412/theory/autoresearch_bp.pdf)
+- BP source paper: [`theory_validation_bp_20260412/theory/BP.pdf`](theory_validation_bp_20260412/theory/BP.pdf)
 
 ### AI task queues
 

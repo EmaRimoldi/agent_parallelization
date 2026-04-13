@@ -2,7 +2,7 @@
 
 ## Scope
 
-This audit reads [autoresearch_bp.pdf](../theory/autoresearch_bp.pdf) against [BP.pdf](../../BP.pdf) and classifies each central claim as:
+This audit reads [autoresearch_bp.pdf](../theory/autoresearch_bp.pdf) against [BP.pdf](../theory/BP.pdf) and classifies each central claim as:
 
 - formally inherited from BP,
 - plausible but under-justified in the AutoResearch specialization,

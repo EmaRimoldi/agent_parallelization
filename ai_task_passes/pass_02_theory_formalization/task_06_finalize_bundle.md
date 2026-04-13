@@ -14,7 +14,7 @@ Produce a clean handoff package for a future reviewer / model / collaborator.
 4. If the final theorem changed materially, regenerate:
    - `theory_validation_bp_20260412/theory/autoresearch_bp_revised.tex`
    - `theory_validation_bp_20260412/theory/autoresearch_bp_revised.pdf`
-   - root copy `autoresearch_bp_revised.pdf`
+   - keep `theory_validation_bp_20260412/theory/` as the canonical theory location
 5. Write a final handoff note explaining:
    - what is done
    - what remains open

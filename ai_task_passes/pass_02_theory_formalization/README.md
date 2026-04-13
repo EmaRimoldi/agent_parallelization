@@ -7,7 +7,7 @@ This directory is the second AI task pass. It is a sequential work queue for tur
 The current repository already contains:
 
 - a validation bundle in `theory_validation_bp_20260412/`
-- a revised theory PDF in `autoresearch_bp_revised.pdf`
+- a revised theory PDF in `theory_validation_bp_20260412/theory/autoresearch_bp_revised.pdf`
 - pilot results and a noise assay
 
 Those artifacts establish that:

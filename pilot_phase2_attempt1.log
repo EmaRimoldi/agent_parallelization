@@ -1,3 +1,0 @@
-[1/12] START pilot_d00_rep1: run-single-long --experiment-id pilot_d00_rep1 --time-budget 30 --config configs/experiment_d00.yaml
-[1/12] DONE pilot_d00_rep1
-[2/12] START pilot_d10_rep1: run-single-memory --experiment-id pilot_d10_rep1 --time-budget 30 --config configs/experiment_d10.yaml
