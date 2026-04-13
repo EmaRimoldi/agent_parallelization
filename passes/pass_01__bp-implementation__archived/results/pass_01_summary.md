@@ -15,6 +15,26 @@ The BP framework decomposes agent performance via Delta = log(kappa_0/kappa) + p
 | **Single (0)** | d00 (baseline) | d10            |
 | **Parallel (1)** | d01           | d11            |
 
+### Task, model, and metrics
+
+**Task**: Each LLM agent (claude-haiku-4-5) is given a git repository containing a CIFAR-10 image classification problem. The agent autonomously reads and edits `train.py`, choosing hyperparameters and architecture modifications, then runs training. After each training attempt, the agent observes the result and decides what to try next.
+
+**Model being trained**: A configurable CNN (`CIFAR10Net`) for CIFAR-10 (32x32 RGB images, 10 classes). Default architecture: 3 convolutional blocks (Conv2d + BatchNorm + ReLU + Dropout + MaxPool), followed by a fully connected classifier (128 hidden units). ~357K parameters. All training runs on CPU (no GPU available in this environment).
+
+**What the agent optimizes**: Across successive training attempts within a single experiment, the LLM agent modifies `train.py` to change:
+- **Optimizer**: type (Adam, AdamW, SGD), learning rate, weight decay, momentum, betas
+- **Schedule**: warmup epochs, LR decay factor, decay milestones
+- **Architecture**: depth (number of conv blocks), base channels, channel multiplier, dropout rate, FC hidden width, batch norm on/off
+- **Data**: batch size
+
+The agent follows a one-change-per-turn strategy, guided by its memory of previous attempts.
+
+**val_bpb metric**: Despite the name "bits per byte", this is simply the **cross-entropy loss** on the CIFAR-10 test set (10,000 images). It is printed as `val_bpb` in the training output but is identical to `val_loss`. Lower is better. Typical range: 0.73-0.90 for well-tuned models, ~1.9 for untrained/short runs.
+
+**Why initial val_bpb differs across runs**: Each experiment starts from a different git commit state. The agent modifies `train.py` during the experiment, and each repetition starts fresh from the repository baseline — but different experiment batches may have been launched from slightly different baseline commits (with different default hyperparameters). Additionally, with only 120 seconds per training attempt and different random seeds for data augmentation order, the first evaluation point varies. This is an uncontrolled source of variance in Pass 01.
+
+**Tokens consumed**: This counts **Claude API tokens** (input + output) used by the LLM agent during its autonomous loop — how much "thinking" the agent did. It is NOT related to training data tokens. Counted from the API usage response when available, or estimated as characters/4 as fallback. Parallel cells consume roughly 2x more tokens because two agents run simultaneously.
+
 Three experiment classes were run:
 
 ### 1. Pilot 2x2 feasibility — 12 runs (4 cells x 3 reps)
@@ -27,7 +47,13 @@ Same 4 modes as the pilot, but with a shorter **10-minute budget** (600s) and 12
 
 ### 3. Resource contention evaluation — scaling study N=1..8
 
-Measures how CPU training quality degrades when multiple agents train simultaneously on a 10-core CPU machine. Uses a **2-second micro-budget** per training run (not the full 30-min agent loop) to isolate the pure resource contention effect. Compares sequential execution (N runs one after another) vs parallel execution (N runs simultaneously) at N=1,2,4,8, with two thread policies: default (PyTorch uses all cores) and partitioned (cores divided equally among agents). This answers: "how much do we lose by running agents in parallel on shared hardware?"
+In the pilot, parallel cells (d01/d11) showed worse val_bpb than single cells (d00/d10). But is that because parallelism itself is unhelpful, or because two training processes running simultaneously on the same CPU compete for compute and each one gets fewer gradient steps done?
+
+To answer this, we remove the LLM agent entirely and run **only the training script** (`train.py`) directly, with a fixed 2-second training budget. This isolates the pure hardware contention effect: same code, same hyperparameters, same seed — the only variable is how many copies run at the same time on the 10-core CPU machine.
+
+The experiment launches N identical `train.py` processes simultaneously (N=1,2,4,8) and measures: (a) how many gradient steps each process completes in 2 seconds, (b) the resulting val_bpb, (c) total wall time and throughput. Two thread policies are tested: **default** (PyTorch's OpenMP uses all available cores per process, so N processes fight over the same 10 cores) and **partitioned** (CPU affinity pins 10/N cores to each process, eliminating thread contention).
+
+Note: the val_bpb values here (~1.9) are much worse than the pilot (~0.8) because the training budget is 2 seconds vs 120 seconds — only ~19 gradient steps vs hundreds. The absolute values don't matter; what matters is the **relative degradation** as N increases.
 
 ---
 
