@@ -108,7 +108,7 @@ This lets each agent see what the other has tried, ideally reducing duplicated e
 
 **No memory (d00, d01)**: The agent receives only its current budget status and task description. Previous attempts are visible only through the growing conversation context, which degrades as the context window fills up.
 
-Three experiment classes were run:
+Three experiment classes were run in the original pass, and one fixed-step follow-up benchmark was later added to clarify the CPU contention interpretation:
 
 ### 1. Pilot 2x2 feasibility — 12 runs (4 cells x 3 reps)
 
@@ -127,6 +127,23 @@ To answer this, we remove the LLM agent entirely and run **only the training scr
 The experiment launches N identical `train.py` processes simultaneously (N=1,2,4,8) and measures: (a) how many gradient steps each process completes in 2 seconds, (b) the resulting val_bpb, (c) total wall time and throughput. Two thread policies are tested: **default** (PyTorch's OpenMP uses all available cores per process, so N processes fight over the same 10 cores) and **partitioned** (CPU affinity pins 10/N cores to each process, eliminating thread contention).
 
 Note: the val_bpb values here (~1.9) are much worse than the pilot (~0.8) because the training budget is 2 seconds vs 120 seconds — only ~19 gradient steps vs hundreds. The absolute values don't matter; what matters is the **relative degradation** as N increases.
+
+### 4. Fixed-step CPU contention follow-up — N=2
+
+A later follow-up benchmark was added to answer the complementary question that the fixed-time scaling study could not answer: if every `train.py` process is forced to complete the same number of gradient updates, does CPU parallelism still hurt validation quality, or does it only make each evaluation slower?
+
+This matters because the 2x2 agent design can be run with either fixed-time or fixed-step evaluators. Under a fixed-time evaluator, parallel jobs can produce worse results simply because each job completes fewer gradient steps in the same wall-clock budget. Under a fixed-step evaluator, the gradient-update count is equalized, so any remaining contention appears as wall-clock overhead instead of a direct quality penalty.
+
+The follow-up used the deterministic Pass 03 training workspace, CPU-only execution, and `MAX_STEPS = 300` for every worker. Results are stored in `resource_contention__fixed-step-followup__20260413/`.
+
+| Condition | Group wall time | Mean worker time | Steps | Mean val_bpb |
+|-----------|-----------------|------------------|-------|--------------|
+| 1 process, 4 threads | 86.99s | 85.88s | 300 | 1.267963 |
+| 2 sequential processes, 4 threads each | 172.44s | 85.10s | 300, 300 | 1.267963 |
+| 2 parallel processes, 4 threads each | 98.48s | 97.15s | 300, 300 | 1.267963 |
+| 2 parallel processes, 2 threads each | 125.86s | 124.60s | 300, 300 | 1.267963 |
+
+Interpretation: fixed-step CPU parallelism at N=2 did not reduce validation quality because all runs completed the same 300 gradient updates and reached the same val_bpb. It did introduce wall-clock contention. The best tested setting was two concurrent processes with four threads each: it finished the two evaluations 1.75x faster than running them sequentially, but each worker was 14.2% slower. Limiting each process to two threads was worse on this workload, giving only 1.37x group speedup and a 46.4% per-worker slowdown.
 
 ---
 
@@ -228,6 +245,8 @@ This study isolates CPU contention by running identical 2-second training tasks 
 
 **Figure 2 interpretation**: The left panel shows both policies diverge sharply from the ideal linear speedup after N=2, plateauing around 3x at N=8. The right panel reveals the cost: default-policy val_bpb degrades nearly linearly with N (~0.033 per doubling). The partitioned policy flattens the curve at N=2 (no quality loss) but converges with default at higher N, where there simply aren't enough cores per agent (1 core at N=8 vs 10 at N=1). The key takeaway is that for the pilot's N=2 (d01/d11), the contention penalty is real but modest (~2% val_bpb degradation with default policy, near-zero with partitioning). This means the d01/d11 quality gap vs d00/d10 in the pilot is partly but not entirely explained by contention — some signal may remain.
 
+**Fixed-step follow-up**: A later N=2 benchmark held gradient updates fixed at 300 steps per worker. In that setting, two concurrent CPU training jobs reached the same val_bpb as sequential jobs, but each worker slowed down. The best tested setting, 2 parallel processes with 4 threads each, gave a 1.75x group-level speedup over two sequential evaluations while slowing each worker by 14.2%. This clarifies the fixed-time result: under fixed-time evaluation, parallelism hurts quality because it reduces completed steps; under fixed-step evaluation, it mainly increases evaluation latency.
+
 ### 4. Edit Category Distribution
 
 The decomposition terms phi, G, and epsilon depend on classifying each agent edit into categories (optimizer, regularization, architecture, data_pipeline, other). The mode labeling script analyzes the git diff and the agent's stated hypothesis to assign a category. Here is the distribution across all pilot runs:
@@ -267,7 +286,7 @@ The decomposition terms phi, G, and epsilon depend on classifying each agent edi
 
 1. **Memory is the strongest single factor**: Adding memory to a single agent produced the best val_bpb (0.739 exploratory, 0.782 pilot mean), consistently outperforming no-memory counterparts. This aligns with H2's direction but was not statistically robust.
 
-2. **Parallelism introduces CPU contention**: On shared-CPU hardware, parallel agents compete for resources, degrading individual training quality. This is a confound that must be controlled before any claim about parallelism can be made — the resource contention experiment quantified this at ~2% degradation for N=2.
+2. **Parallelism introduces CPU contention**: On shared-CPU hardware, parallel agents compete for resources. Under fixed-time evaluation, this degrades individual training quality because each worker completes fewer gradient steps. The fixed-step follow-up shows the complementary behavior: when every worker completes the same 300 steps, quality is equalized but the parallel workers are slower. This is a confound that must be controlled before any claim about parallelism can be made.
 
 3. **The 2x2 design is viable but underpowered**: With only 3 reps per cell, variance is too high to draw inferential conclusions. The factorial structure is sound, but needs more repetitions and confound control.
 
