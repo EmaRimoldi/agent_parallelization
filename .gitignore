@@ -25,6 +25,8 @@ passes/*/results/
 !passes/pass_01__bp-implementation__archived/results/**
 !passes/pass_02__theory-validation__superseded/results/
 !passes/pass_02__theory-validation__superseded/results/**
+!passes/pass_03__calibration-design__superseded/results/
+!passes/pass_03__calibration-design__superseded/results/**
 
 # External repos
 agents-swarms/
