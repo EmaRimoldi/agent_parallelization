@@ -1,0 +1,470 @@
+===== PAGE 1 =====
+Operationalizing the Four-Term Decomposition on AutoResearch:
+Architecture Choice for Agentic Training Research
+under Wall-Clock and Cost Budgets
+Abstract
+AutoResearch [2] is a concrete instance of a budgeted transductive task with a noisy scalar
+verifier: an agentic system modifies a single training script and is judged by held-out validation
+bits-per-byteafterafixedfive-minutetrainingrunonasingleH100. WeapplytheBeneventano–
+Poggio (BP) framework [1] to five architecture-choice questions: what “better” means, when
+one architecture beats another, why, by how much, and whether the answer can be predicted
+in advance. Three minimal extensions to BP are required and no more: (i) splitting certified
+timeintowall-clockandcostaxes,(ii)introducingalatentlosstoabsorbverifiernoise, and(iii)
+folding context pressure into the per-step cost. The four-term decomposition ∆=log(κ /κ)+
+0
+φ+G−εholdsonbothaxeswiththesamethreeexplanatorytermsandabifurcatedcostterm.
+We instantiate the framework on the stage-1 2×2 memory/parallelism ablation and specify a
+measurement protocol with falsifiable predictions.
+1 Introduction
+The meeting that motivated this note posed five architecture-choice questions for agentic systems
+on verifiable tasks:
+Q1. What does it mean for architecture A to be better than architecture B?
+Q2. When is A better than B?
+Q3. Why is A better than B?
+Q4. By how much is A better than B?
+Q5. Can we predict in advance when A will be better than B?
+Beneventano and Poggio (BP) [1] answer analogous questions in the setting of formal theorem
+proving in Lean 4, using a budgeted transductive task formalism, a packed latent-mode family, and
+a four-term decomposition
+κ
+0
+∆ = log + φ + G − ε
+κ
+that separates per-step cost, within-mode competence, information generation, and routing mis-
+match into independently measurable channels. Their setting assumes a deterministic verifier (the
+Lean kernel), a single fused certified time that collapses wall-clock and cost, and an implicit treat-
+ment of context budget.
+AutoResearch is structurally close but differs in three ways that matter for the meeting’s ques-
+tions. The verifier, val bpb after five minutes of training, is scalar and noisy. Architecture choice
+centers on parallel agents and shared workspace rather than model choice, which makes wall-clock
+genuinely distinct from cost. And the agent’s context fills across attempts, which affects per-step
+latency in a way BP’s constant κ cannot express.
+1
+
+===== PAGE 2 =====
+We make three minimal extensions, then use BP’s formalism as-is:
+(cid:136) Split certified time into T and T with parallel decompositions (Section 3).
+wall cost
+(cid:136) Replace the deterministic verifier with a latent loss L(y) := E [V(y,ω)] and an incumbent
+ω
+re-evaluation protocol (Section 2).
+(cid:136) Fold context pressure into a c/K-dependent per-step cost, κ(M,c/K), preserving the four-term
+structure (Section 4).
+Sections 2–5 build the apparatus; Section 6 answers the five questions directly; Section 7 gives the
+measurement protocol; Section 8 situates the result.
+2 AutoResearch as a budgeted transductive task
+AutoResearch [2] instantiates a specific budgeted transductive task in the sense of BP Definition 1.
+Definition 1 (AutoResearch task). The AutoResearch task is the tuple T = (X,Y,V,B) where:
+AR
+(cid:136) X = {x }isthesingletoninstancegivenbythefixednanochatdataset, tokenizer, andevaluation
+0
+harness established by prepare.py;
+(cid:136) Y is the set of syntactically valid train.py files that compile and complete training within the
+platform budget;
+(cid:136) V : Y ×Ω → R is the val bpb score returned after a five-minute training run with training
+≥0
+randomness ω ∈ Ω;
+(cid:136) B = (b ,b ) specifies wall-clock and monetary budgets for the full agentic system.
+t c
+val bpb is a continuous loss (lower is better), not a binary success indicator. The BP frame-
+work in its binary form does not directly apply; we use the continuous-reward extension of BP
+Appendix A, with one additional ingredient—the latent loss—to handle the noise.
+Definition 2 (Latent loss). For candidate y ∈ Y, the latent loss is
+L(y) := E [V(y,ω)].
+ω
+A single evaluation V(y,ω) is an unbiased but noisy estimate of L(y). Success at threshold q⋆ means
+producing y with L(y) ≤ q⋆.
+The latent loss is the clean object against which to define certified time. Any ranking of can-
+didates based on single noisy evaluations is biased upward by selection; only repeated evaluation
+produces a consistent estimate. Section 7 specifies the incumbent re-evaluation protocol that op-
+erationalizes this.
+Definition 3 (AutoResearch architecture). An AutoResearch architecture is a design tuple
+d = (M, π, Ω, W, K, p)
+in the BP sense (BP Definition 3), specialized to AutoResearch as follows: M is the base LLM
+(a single choice in our study); π is the orchestration/routing policy over edit strategies; Ω is the
+tool set (shell, file I/O, uv run); W is the persistent external workspace (a directory of markdown
+files and optional cached training artifacts); K is the active context budget per LLM call; p is the
+number of parallel agents. We write A for the solver induced by d.
+d
+2
+
+===== PAGE 3 =====
+The stage-1 comparison holds (M,Ω,K) fixed and varies (π,W,p). Four architectures instanti-
+ate the 2×2 baseline from the meeting transcript:
+Definition 4 (The 2×2 baseline).
+d : single agent, no external memory (workspace session-only),
+00
+d : single agent, persistent external memory,
+10
+d : two parallel agents, no shared memory,
+01
+d : two parallel agents, shared external workspace.
+11
+In BP coordinates: d has (W = ∅,p = 1); d has (W ̸= ∅,p = 1); d has (W = ∅,p = 2); d
+00 10 01 11
+has (W ̸= ∅,p = 2).
+This is the minimum design that isolates the memory main effect, the parallelism main effect,
+and their interaction.
+3 Two certified times: wall-clock and cost
+BP defines a single certified time TA(n,δ). For AutoResearch, two things force a split. First,
+the five-minute training is a fixed wall-clock block per attempt, independent of the number of
+concurrent agents proposing in parallel. Second, running two agents in parallel roughly halves the
+wall-clock path for a given number of completed attempts but leaves the total token and GPU-hour
+cost approximately unchanged (in fact slightly higher due to coordination overhead). A single TA
+cannot express both facts.
+Definition 5 (Wall-clock and cost budgets). For a run of architecture d over a sequence of at-
+tempts, let τd be the elapsed critical-path time from run start, including the longest dependency
+wall
+chain of LLM calls, file writes, and training evaluations. Let τd be the cumulative monetary cost:
+cost
+(cid:88)
+τd = p · tokens + p ·GPU-hours,
+cost LLM GPU
+(cid:124) (cid:123)(cid:122) (cid:125)
+calls training cost
+(cid:124) (cid:123)(cid:122) (cid:125)
+agent tokens
+where p is the token price and p the hourly H100 rate.
+LLM GPU
+Definition 6 (Certified times on two axes). For target latent loss q⋆ and confidence level 1−δ,
+(cid:110) (cid:104) (cid:105) (cid:111)
+Td (q⋆,δ) = inf t : P ∃s : τd (s) ≤ t, L(y ) ≤ q⋆ ≥ 1−δ ,
+wall wall s
+(cid:110) (cid:104) (cid:105) (cid:111)
+Td (q⋆,δ) = inf c : P ∃s : τd (s) ≤ c, L(y ) ≤ q⋆ ≥ 1−δ ,
+cost cost s
+where y is the s-th candidate produced by A and the probability is over training randomness ω
+s d
+and any internal randomness of the solver. The log-speedups are ∆ = logTd0 −logTd and
+wall wall wall
+∆ = logTd0 −logTd .
+cost cost cost
+Both are primary quantities. The point, spelled out more formally in Section 6, is that the two
+certified times may order architectures differently; when they do, the correct description is a Pareto
+trade-off, not a universal win.
+3
+
+===== PAGE 4 =====
+4 Modes, context pressure, and the two per-step costs
+WeinstantiateBP’spackedlatent-modeassumption(BPAssumption6)withafixedmodepartition
+suited to AutoResearch.
+Assumption 1 (AutoResearch modes). The latent mode S ∈ {1,...,6} takes values in
+{optimizer, LR schedule, architecture, regularization, data pipeline, other}
+with prior π estimated empirically from successful edits. Each mode has a within-mode certified
+scale t (M,s) giving the expected latent-loss improvement per five-minute attempt when the agent
+0
+is routed to mode s. The baseline allocation q = π is prior-matched.
+0
+The mode partition is an analyst choice, as in BP. We discuss sensitivity in Section 8.
+Context pressure enters through the per-step cost. As an agent accumulates attempts, its
+session context—the running diff of train.py, prior experimental results, critique of failed edits—
+fills toward its ceiling K. Both wall-clock per LLM call (via attention over longer context) and
+token cost (via input tokens) grow as a function of the context fill ratio c/K ∈ [0,1).
+Definition 7 (Context-pressure-dependent per-step costs). Let c denote the active context fill at
+t
+agent-step t and K the context ceiling. The per-step wall-clock and per-step cost functions are
+κ (M,c/K) = wall-clock seconds per LLM call+fixed evaluation time,
+wall
+(cid:0) (cid:1)
+κ (M,c/K) = p · input tokens(c)+output tokens +p ·(5 min).
+cost LLM GPU
+Both are non-decreasing in c/K. Averaged over a run, we write κ¯ (d) and κ¯ (d).
+wall cost
+This folding is deliberate. An alternative—introducing context pressure as a fifth additive term
+in the decomposition—would break the clean algebraic structure. Treating c/K as a parameter of
+κ keeps the four-term form intact while making the pressure effect measurable: architectures that
+managecontextwellshiftκ¯ downward, andthisshiftappearsinthecosttermofthedecomposition.
+Remark 1 (Memory as κ-shifter). In the 2×2 baseline, external memory in d and d does not
+10 11
+primarily act through the information term G; it acts by lowering the effective c/K, because results
+offloaded to W need not live in the active context. The decomposition diagnoses this correctly only
+if κ is allowed to depend on context pressure.
+5 The four-term decomposition for AutoResearch, on both axes
+We now import BP Theorem 21 directly, apply it separately to each axis, and note that three of
+the four terms are shared.
+Theorem 1 (Two-axis model-aware decomposition). Under Assumption 1 and the continuous-
+rewardextensionofBPAppendixA,withaprior-matchedbaselinearchitectured againstadeployed
+0
+architecture d,
+κ¯ (d )
+wall 0
+∆ (d) = log +φ(d ,d)+G(d)−ε(d), (1)
+wall 0
+κ¯ (d)
+wall
+κ¯ (d )
+cost 0
+∆ (d) = log +φ(d ,d)+G(d)−ε(d), (2)
+cost 0
+κ¯ (d)
+cost
+where φ, G, and ε are defined exactly as in BP Theorem 21 and take the same numerical values
+on both axes. Only the cost term differs.
+4
+
+===== PAGE 5 =====
+Proof. Apply BP Lemma 18 and Theorem 21 to the log of each certified time separately. The
+log-linear structure logT (s) = logκ+logc +logt (M,s)−logq(s) holds with κ replaced by
+q sim 0
+κ or κ . The quantities t (M,s), G(M), and ε are structural features of the task and router
+wall cost 0
+and do not depend on which cost-conversion factor is applied to wall-clock seconds. The cross-
+(cid:80)
+entropy identity p(s)log(1/q(s)) = H(p)+KL(p∥q) separates the allocation into information
+s
+and routing exactly as in BP, on both axes.
+The practical meaning is that a single stage-1 pilot estimates φ, G, and ε once; the two axes
+differ only in how each attempt is priced.
+6 Answers to the five meeting questions
+We can now address each question directly.
+6.1 Q1. What does “better” mean?
+Architecture d dominates d′ at target q⋆ if it is at least as good on both axes:
+Td (q⋆,δ) ≤ Td′ (q⋆,δ) and Td (q⋆,δ) ≤ Td′ (q⋆,δ),
+wall wall cost cost
+with strict inequality on at least one. When neither dominates, we describe the pair as a Pareto
+trade-off. Equivalently, d dominates d′ if and only if ∆ (d | d′) ≥ 0 and ∆ (d | d′) ≥ 0, with
+wall cost
+strict sign on at least one.
+This is strictly stronger than a single-axis comparison and weaker than a scalar utility; it
+matches the meeting’s insistence that the two axes be kept distinct. A paper reporting only wall-
+clock speedup hides cost-axis losses, and vice versa; reporting both makes Pareto disagreements
+visible and informative.
+6.2 Q2. When is A better than B?
+The 2×2 baseline gives three exact outcome-level contrasts per axis, following the pattern of BP
+Corollary 26 applied to the design variables (W,p) instead of to model choice. For a functional
+F ∈ {∆ ,∆ }, define the memory main effect, parallelism main effect, and interaction:
+wall cost
+MEF = 1[(F −F )+(F −F )],
+W 2 00 10 01 11
+MEF = 1[(F −F )+(F −F )],
+P 2 00 01 10 11
+INTF = (F −F )−(F −F ).
+00 10 01 11
+Substituting Theorem 1 into each contrast gives the regime answer. For the memory main effect
+on the cost axis,
+(cid:104) (cid:105)
+ME∆cost = 1 log κ¯cost00 +log κ¯cost01 +∆φ +∆G −∆ε ,
+W 2 κ¯cost10 κ¯cost11 W W W
+(cid:124) (cid:123)(cid:122) (cid:125)
+context-pressurerelief
+and analogously on the wall-clock axis. The design statement is: memory helps on axis F whenever
+context-pressure relief plus any information gain outweighs the routing and competence penalties.
+The formula tells the builder which term to measure to determine the sign.
+5
+
+===== PAGE 6 =====
+6.3 Q3. Why is A better than B?
+The decomposition answers this by construction. Each of the four terms is measurable indepen-
+dently and maps to a distinct design lever:
+(cid:136) log(κ¯ /κ¯ ): agent token price times tokens-per-call plus GPU-hours. The channel through
+cost0 cost
+which cheaper models and better context management win.
+(cid:136) log(κ¯ /κ¯ ): latency per LLM call plus fixed training time. The channel through which
+wall0 wall
+parallelism and faster critical paths win.
+(cid:136) φ: within-modecompetence, i.e.expectedlog-ratiooflatent-lossimprovementspermode. Fine-
+tuning and better reasoning capacity enter here.
+(cid:136) G: information generated by verifier feedback. Running more informative trials—diverse edits,
+early-stop signals, in-training curvature—raises G.
+(cid:136) ε: routing mismatch. Shared memory that broadcasts which modes are currently promising
+lowers ε by aligning the allocation with the true posterior.
+A diagnostic table for the 2×2:
+Design variable Primary affected term Axis where it bites
+External memory (W ̸= ∅) κ¯ ,κ¯ via c/K; also ε both
+cost wall
+Parallelism (p = 2) κ¯ via critical path wall-clock only
+wall
+Shared workspace (W shared) ε and diversity of attempts both
+6.4 Q4. By how much?
+Theorem 1 gives the quantitative answer directly. Using illustrative values (a scaffold for magni-
+tudes, to be replaced by pilot-measured values):
+Design log(κ¯ /κ¯ ) log(κ¯ /κ¯ ) φ G −ε ∆ / ∆
+cost0 cost wall0 wall cost wall
+d +0.10 +0.10 0 +0.05 0 +0.15 / +0.15
+10
+d −0.10 +0.60 0 0 −0.05 −0.15 / +0.55
+01
+d −0.05 +0.65 0 +0.15 +0.20 +0.30 / +1.00
+11
+(Illustrative only. Values in nats. Baseline is d .)
+00
+Reading the last row: d is exp(1.00) ≈ 2.7× faster than the single-agent baseline on wall-clock
+11
+and roughly exp(0.30) ≈ 1.35× cheaper on cost. The wall-clock speedup is driven almost entirely
+by the parallelism term +0.65; the cost axis is kept positive only because the shared workspace
+reduces ε enough to offset the small cost-term loss from duplicated agent reasoning.
+A paper reporting only “d is 2.7× faster” loses exactly this sensitivity. If token prices drop
+11
+by a factor of two, the cost term on d shifts by log2 ≈ 0.69 nats, the cost-axis verdict becomes
+11
+unambiguously positive, and the sensitivity of the conclusion to price assumptions becomes visible.
+The decomposition makes this traceable; a raw win rate does not.
+6
+
+===== PAGE 7 =====
+6.5 Q5. Can we predict in advance when A will be better than B?
+Specializing BP’s crossover formula (BP Corollary 26) to the memory axis under AutoResearch
+coordinates: d dominates d on the cost axis whenever
+10 00
+κ¯
+cost00
+log + ∆ε > |∆G |+|∆φ | .
+W W W
+κ¯
+cost10 (cid:124)(cid:123)(cid:122)(cid:125) (cid:124) (cid:123)(cid:122) (cid:125)
+(cid:124) (cid:123)(cid:122) (cid:125) routinggain information/competencepenalty,ifany
+context-reliefsavings
+This is the condition needed to say, before running, that persistent external memory is expected to
+help. It translates the meeting’s question “when does memory pay for itself?” into three quantities
+estimable from a pilot: the fractional token savings from offloading, the expected routing-mismatch
+reduction from re-exposing prior results at a later attempt, and any information/competence cost
+from the indirection.
+For parallelism on the wall-clock axis, the prediction is even simpler. Under the packed-family
+assumption and with perfect work distribution, p = 2 roughly halves κ¯ (so the cost-term gain
+wall
+is about log2 ≈ 0.69 nats) as long as the two agents do not redundantly propose the same edits—
+which is the routing-mismatch channel ε. The prediction is
+∆ (d | d ) ≈ log2−∆ε .
+wall 01 00 01|00
+If the routing penalty from duplication exceeds log2 ≈ 0.69 nats, two independent agents are worse
+than one on wall-clock, despite the apparent parallelism. This is measurable and falsifiable.
+Putting these together yields an architecture-choice recipe without running the full 2×2: esti-
+mate κ¯ ratios from context-length measurements, estimate ε by comparing the empirical action
+cost
+distribution of two single-agent runs against a pooled posterior, and predict the sign of each con-
+trast before committing to the full experiment. The predictions are not certain—the pilot protocol
+below is needed to validate them—but they are concrete enough to be wrong.
+7 Measurement protocol for the 2 × 2 pilot
+The decomposition is useful only if the four terms can be estimated from AutoResearch runs. We
+specify a protocol in the style of BP Section 9.
+7.1 Mode labeling
+Pool all successful edits (those that improved the latent val bpb above the pre-edit incumbent)
+across development-set runs of d and d . Apply a domain-specific similarity metric: syntactic-
+00 11
+tree distance on train.py diffs, augmented with keyword tags (optim., lr, arch, reg, data).
+Hierarchical agglomerative clustering with bootstrap stability selection produces the empirical par-
+tition; retain the mode count that is stable across resamples, which for AutoResearch should land
+in the 4–8 range, compatible with Assumption 1. Fix labels before any model-dependent quantity
+is computed. Sensitivity to the partition is checked by rerunning the analysis with ±1 merged or
+split clusters.
+7.2 Event-level logging schema
+Per LLM call: model id, start and end timestamps, input and output tokens, active context fill c ,
+t
+which agent emitted the call, and the full diff applied to train.py if any.
+7
+
+===== PAGE 8 =====
+Per evaluation (train.py run): pre-run SHA of the file, five-minute start and end timestamps,
+final val bpb, compile-time errors, OOM events, commit of prepare.py used.
+Per attempt (one LLM-edit-evaluate cycle): attempt index, mode label (assigned post-hoc from
+the diff), cumulative agent-token cost, cumulative GPU-hours, whether this attempt updated the
+best-so-far.
+Per run (one full architecture-level experiment): all of the above concatenated, plus the run-level
+τd critical-path trace and the best-so-far curve as a function of τd and τd .
+wall wall cost
+7.3 Incumbent re-evaluation for noise control
+Because val bpb is noisy, the best-so-far candidate cannot be identified from a single evaluation.
+The protocol: whenever an attempt s produces V(y ,ω ) < V , re-run the training for
+s s current-best
+candidate y two additional times to obtain Lˆ(y ) as the mean of three evaluations; update the
+s s
+incumbent only if Lˆ(y ) < Lˆ(y ) by more than the pooled standard error. These re-
+s current-best
+evaluations are charged to a separate diagnostic budget distinct from the benchmark budget. This
+is the continuous-reward analogue of BP’s δ-confident success criterion.
+7.4 Budget equalization
+Apples-to-apples comparison requires a single fairness condition, and wall-clock and cost must be
+fixed separately. We run the pilot under both:
+Condition A (wall-clock-equalized): each architecture gets a fixed T-hour wall-clock budget, for
+T around 2 hours, matching Karpathy’s baseline pace of roughly 12 attempts/hour. Single-agent
+designs complete about 12T attempts; two-agent designs complete about 24T attempts minus
+coordination overhead. Reports T (·) and best latent loss at exhaustion.
+wall
+Condition B (cost-equalized): each architecture gets a fixed total-cost budget in dollars, with the
+cost accounting of Definition 5. Reports T (·) and best latent loss at exhaustion.
+cost
+The two conditions will generically disagree on the ranking. This is the Pareto fact from Q1 in
+empirical form.
+7.5 Estimators for the four terms
+Following BP Table in spirit:
+(cid:136) κ¯ (d), κ¯ (d): direct averages from logs, stratified by context-fill bin.
+cost wall
+(cid:136) πˆ: empirical prior over modes from pooled successful attempts.
+(cid:136) φ(d ,d): (cid:80) πˆ(s)log (cid:0) tˆ (d ,s)/tˆ (d,s) (cid:1) ,wheretˆ isthemedianwithin-modeattempts-to-improvement.
+0 s 0 0 0 0
+(cid:136) Gˆ(d) = H(πˆ)− 1 (cid:80) H(πˆ ), with Miller–Madow correction for entropy bias.
+N i Di
+(cid:136) εˆ(d) = 1 (cid:80) KL(πˆ ∥qˆ ) with Laplace smoothing.
+N i Di Di
+Bootstrap confidence intervals accompany every quantity.
+7.6 Testable predictions
+Translating the meeting’s hypotheses into predictions on the decomposition:
+H1. Parallelism helps only on the wall-clock axis: ∆ (d | d ) > 0 while ∆ (d | d ) ≤ 0.
+wall 01 00 cost 01 00
+Specifically ∆ (d | d ) ≈ log2−∆ε .
+wall 01 00 01|00
+H2. External memory helps on both axes through context-pressure relief: log(κ¯ /κ¯ ) > 0 on
+00 10
+both κ¯ and κ¯ , and the effect grows with attempt count.
+cost wall
+8
+
+===== PAGE 9 =====
+H3. Shared memory lowers routing mismatch on multi-agent designs: ε(d ) < ε(d ), with mag-
+11 01
+nitude comparable to log2 in the regime where d wall-clock-dominates d .
+11 00
+H4. The sign of ∆ on the parallelism contrast is sensitive to coordination efficiency: if ε(d )−
+wall 01
+ε(d ) > log2, two independent agents lose on wall-clock.
+00
+H5. Contextpressureisadominantmechanism: stratifyingκ¯ byc/K binshowsmonotoneincrease
+in per-attempt cost, and external memory’s main effect is proportional to the average c/K
+difference between d and d .
+00 10
+7.7 Negative-result criterion
+If, after the pilot, φˆ, Gˆ, and εˆfor the 2×2 cells do not exceed their bootstrap uncertainty, and the
+raw best-so-far curves in Conditions A and B are explainable by a single scalar efficiency metric
+with R2 > 0.9, the decomposition has added no explanatory power in this domain and the paper
+should report this as a negative result.
+7.8 Rough budget
+At Karpathy’s default pace of roughly 12 attempts/hour per agent, with a baseline of about $0.02
+per attempt in agent tokens plus $0.20 per attempt in GPU (at an H100 spot rate of $2.40/hour),
+a full 2×2 pilot under both conditions, run to 200 attempts per cell, costs approximately $180 in
+compute and $50 in agent tokens, for a total near $230, plus the engineering cost of the logging
+harness and re-evaluation protocol. This is within the screening heuristic of BP Section 9.2.
+8 Discussion
+What the framework provides. Threethings. First, aformal answerto “better” thatrespects
+the wall-clock/cost distinction the meeting insisted on. Second, an explanatory decomposition that
+traces each design variable to a measurable channel, so that “why did memory help” is not a vibe
+but a number. Third, predictive crossover formulas for each of the three design contrasts on each
+of the two axes, with only three structural quantities (κ¯, ε, G) needing estimation from a pilot.
+What it does not provide. Theframeworkdoesnotsolvethejointdesignoptimization. Itdoes
+nottellthebuilderhowtosetpromptingstyle, toolselection, ormemoryschemainadvance—those
+remain engineering choices. It does not predict the result without a pilot; it structures the pilot’s
+outputs so that a small study generalizes to nearby design points. And it does not cover cross-task
+transfer, since AutoResearch is a singleton task.
+Sensitivity to the mode partition. The six-mode partition of Assumption 1 is a stipula-
+tion, not a discovery. If the empirical clustering of Section 7 produces a substantially different
+partition—say, four modes or nine—the numerical values of G and ε will change, but the quali-
+tative decomposition remains valid as long as the partition is stable across bootstrap resamples.
+Predictions that flip sign under ±1 cluster perturbation should be marked as unstable.
+What the pilot will tell us. Ifthedecompositionandcrossoverpredictionshold, AutoResearch
+becomes the empirical foundation for extending BP beyond Lean: it will have been shown that
+mode-conditioned reasoning works in continuous-verifier settings with noisy evaluation. If the
+predictions fail—for instance, if context pressure turns out not to be the dominant mechanism, or
+9
+
+===== PAGE 10 =====
+if mode labels are unstable across clustering choices—the failure will itself point to which of the
+three extensions was the wrong abstraction. Either outcome is informative.
+The shortest honest summary of this note is: the meeting’s five questions have clean answers
+in BP’s language once wall-clock and cost are decoupled. The rest is instrumentation.
+References
+[1] P.BeneventanoandT.Poggio. Amathematicalframeworkforbuildingagentsystems: task-first
+design, equivalence, and model choice under deployment budgets. Under review, 2026.
+[2] A. Karpathy. AutoResearch: AI agents running research on single-GPU nanochat training
+automatically. https://github.com/karpathy/autoresearch, 2026.
+[3] A. Achille and S. Soatto. AI agents as universal task solvers: it’s all about time. Preprint, 2026.
+10
+

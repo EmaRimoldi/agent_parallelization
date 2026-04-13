@@ -1,0 +1,11 @@
+{
+  "theory_pdf_present": true,
+  "bp_pdf_present": true,
+  "pilot_mapping_present": true,
+  "decomposition_reps_present": true,
+  "mode_labels_assigned_to_all_pilot_experiments": false,
+  "cost_equalized_condition_present": false,
+  "incumbent_reevaluation_evidence_present": true,
+  "gpu_cost_used_in_cost_axis": false,
+  "all_four_terms_non_degenerate": false
+}

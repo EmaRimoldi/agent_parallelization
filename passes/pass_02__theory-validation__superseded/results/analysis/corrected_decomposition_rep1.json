@@ -1,0 +1,146 @@
+{
+  "decompositions": {
+    "d10": {
+      "cost_term_token": -0.15338934313447836,
+      "cost_term_wall": 0.11092683704805194,
+      "phi": NaN,
+      "G": NaN,
+      "epsilon": NaN,
+      "delta_token": NaN,
+      "delta_wall": NaN,
+      "kappa_token": 2358.5,
+      "kappa_wall": 89.40368869174563,
+      "kappa_token_std": 798.7965635880014,
+      "kappa_wall_std": 43.97941725243042,
+      "token_calibration_factor": 0.9998811928240465,
+      "posterior_mode_distribution": null,
+      "routing_mode_distribution": null,
+      "phi_details": {
+        "status": "insufficient_mode_overlap",
+        "overlap_modes": []
+      },
+      "G_details": {
+        "status": "missing_posterior_or_prior"
+      },
+      "epsilon_details": {
+        "status": "missing_posterior"
+      }
+    },
+    "d01": {
+      "cost_term_token": -0.23148955776722482,
+      "cost_term_wall": 0.007150280500254891,
+      "phi": NaN,
+      "G": 0.0,
+      "epsilon": 0.693132365077518,
+      "delta_token": NaN,
+      "delta_wall": NaN,
+      "kappa_token": 2550.0833333333335,
+      "kappa_wall": 99.18020999891127,
+      "kappa_token_std": 954.9812498159323,
+      "kappa_wall_std": 60.589695356190774,
+      "token_calibration_factor": 0.9997557997557998,
+      "posterior_mode_distribution": {
+        "optimization": 1.0
+      },
+      "routing_mode_distribution": {
+        "regularization": 0.5,
+        "optimization": 0.5
+      },
+      "phi_details": {
+        "status": "insufficient_mode_overlap",
+        "overlap_modes": []
+      },
+      "G_details": {
+        "status": "ok",
+        "posterior_mode_distribution": {
+          "optimization": 1.0
+        },
+        "global_prior_mode_distribution": {
+          "optimization": 1.0
+        },
+        "estimator": "pointwise_mi_contribution"
+      },
+      "epsilon_details": {
+        "status": "ok",
+        "posterior_mode_distribution": {
+          "optimization": 1.0
+        },
+        "routing_mode_distribution": {
+          "regularization": 0.5,
+          "optimization": 0.5
+        },
+        "routing_proxy": "all proposed mode labels"
+      }
+    },
+    "d11": {
+      "cost_term_token": -0.18484399264021034,
+      "cost_term_wall": 0.02866959813274771,
+      "phi": NaN,
+      "G": NaN,
+      "epsilon": NaN,
+      "delta_token": NaN,
+      "delta_wall": NaN,
+      "kappa_token": 2433.864864864865,
+      "kappa_wall": 97.06871995154447,
+      "kappa_token_std": 861.904590009263,
+      "kappa_wall_std": 61.244130636323874,
+      "token_calibration_factor": 0.9998810232004759,
+      "posterior_mode_distribution": null,
+      "routing_mode_distribution": null,
+      "phi_details": {
+        "status": "insufficient_mode_overlap",
+        "overlap_modes": []
+      },
+      "G_details": {
+        "status": "missing_posterior_or_prior"
+      },
+      "epsilon_details": {
+        "status": "missing_posterior"
+      }
+    }
+  },
+  "hypotheses": {
+    "H1_wall_positive": false,
+    "H1_token_nonpositive": false,
+    "H1_holds": false,
+    "H2_token_positive": false,
+    "H2_wall_positive": true,
+    "H2_holds": false,
+    "H3_epsilon_d11_lt_d01": false,
+    "H3_holds": false,
+    "H4_epsilon_exceeds_log2": false,
+    "H5_note": "Inspect context_bins and token calibration for monotone context-pressure growth.",
+    "H6_wall_positive": false,
+    "H6_token_positive": false,
+    "H6_holds": false
+  },
+  "global_prior": {
+    "optimization": 1.0
+  },
+  "context_bins": {
+    "d00": {
+      "0%-25%": 2023.111111111111,
+      "25%-50%": null,
+      "50%-75%": null,
+      "75%-100%": null
+    },
+    "d10": {
+      "0%-25%": 2358.5,
+      "25%-50%": null,
+      "50%-75%": null,
+      "75%-100%": null
+    },
+    "d01": {
+      "0%-25%": 2550.0833333333335,
+      "25%-50%": null,
+      "50%-75%": null,
+      "75%-100%": null
+    },
+    "d11": {
+      "0%-25%": 2433.864864864865,
+      "25%-50%": null,
+      "50%-75%": null,
+      "75%-100%": null
+    }
+  }
+}

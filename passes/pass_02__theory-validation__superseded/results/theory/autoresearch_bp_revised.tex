@@ -1,0 +1,500 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{hyperref}
+
+\hypersetup{colorlinks=true, linkcolor=blue, urlcolor=blue, citecolor=blue}
+
+\newtheorem{definition}{Definition}
+\newtheorem{assumption}{Assumption}
+\newtheorem{theorem}{Theorem}
+\newtheorem{corollary}{Corollary}
+\newtheorem{remark}{Remark}
+
+\title{Operationalizing the BP Decomposition on AutoResearch:\\Revised Theorem, Assumptions, and Validation Status}
+\author{}
+\date{April 13, 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This note replaces the earlier AutoResearch BP draft with a narrower and more defensible formulation.
+The original note was close to the Beneventano--Poggio (BP) framework, but it compressed three
+non-trivial bridges into one sentence: the move from BP's model index to full architectures, the
+move from fixed per-step cost to context-dependent average cost, and the move from noisy scalar
+losses to a theorem-level verification object.
+
+The strongest current theorem is best stated \emph{per axis}, not as a shared two-axis identity.
+For a fixed axis $\alpha \in \{\mathrm{wall}, \mathrm{token}\}$, if AutoResearch admits an
+architecture-indexed packed latent-mode family, if success is defined by a latent-loss threshold,
+and if the exact BP-style cost factor is replaced in practice by an arithmetic mean cost
+$\bar\kappa_\alpha$, then
+\[
+\Delta_\alpha(d \mid d_0)
+=
+\log \frac{\bar\kappa_\alpha(d_0)}{\bar\kappa_\alpha(d)}
++ \phi_\alpha(d_0,d)
++ G_\alpha(d)
+- \epsilon_\alpha(d)
++ R_\alpha(d \mid d_0),
+\]
+where $R_\alpha$ is the Jensen remainder induced by replacing the exact effective cost with the
+reported arithmetic mean.
+
+This is weaker than the earlier two-axis statement, but it is the strongest defensible form on the
+current evidence. The present repository evidence supports the usefulness of cost accounting and
+strongly supports the need for repeated evaluation under noisy verification. It does \emph{not}
+yet identify the full $\phi + G - \epsilon$ decomposition empirically, and therefore does not yet
+justify a stronger theorem-estimation package.
+\end{abstract}
+
+\section{Introduction}
+
+The motivating question is unchanged: how should one compare AutoResearch architectures for
+iterative training research under deployment budgets? The intended answer comes from the BP
+decomposition, which separates expected certified log-speedup into four channels:
+
+\begin{enumerate}
+\item per-step cost,
+\item within-mode competence,
+\item information generation,
+\item routing mismatch.
+\end{enumerate}
+
+The earlier draft was directionally right but too fast in execution. It claimed that AutoResearch
+inherits the BP decomposition ``directly'' after three modifications:
+
+\begin{enumerate}
+\item split certified time into wall-clock and cost axes,
+\item replace the noisy verifier with a latent loss,
+\item fold context pressure into per-step cost.
+\end{enumerate}
+
+After auditing the original note against \texttt{BP.pdf} and after reviewing the current repository
+pilot, the right conclusion is stricter:
+
+\begin{quote}
+AutoResearch appears compatible with a BP-style decomposition under explicit additional
+assumptions, but the strongest current theorem is a \emph{single-axis conditional reduction with
+an explicit remainder term}, not a free two-axis corollary.
+\end{quote}
+
+This revised note makes that status explicit.
+
+\section{Theorem-Level Objects}
+
+\begin{definition}[Candidate space]
+Fix a research substrate with immutable data preparation and evaluation harness.
+Let $Y$ be the set of syntactically valid \texttt{train.py} files that compile and complete training
+within the platform budget.
+\end{definition}
+
+\begin{definition}[Observed loss and latent loss]
+For a candidate $y \in Y$, let $V(y,\omega) \in \mathbb{R}_{\ge 0}$ be the observed validation loss
+returned by one stochastic training run under randomness $\omega$.
+Define the latent loss
+\[
+L(y) := \mathbb{E}_\omega[V(y,\omega)].
+\]
+Lower values are better.
+\end{definition}
+
+\begin{definition}[Theorem-level success event]
+Fix a target loss threshold $q^\star$.
+The theorem-level success event is
+\[
+\mathbf{1}\{L(y)\le q^\star\}.
+\]
+That is, the theorem is written for threshold success on \emph{latent} loss, not for one-shot noisy
+evaluations. Noisy evaluations enter only at the estimation layer.
+\end{definition}
+
+\begin{definition}[Architecture]
+An AutoResearch architecture is a design tuple
+\[
+d = (M,\pi,\Omega,W,K,p),
+\]
+where $M$ is the base LLM, $\pi$ is the orchestration/routing policy, $\Omega$ is the tool set,
+$W$ is external memory or workspace structure, $K$ is the active context budget per LLM call,
+and $p$ is the number of parallel agents.
+\end{definition}
+
+\begin{definition}[Axis-specific certified time]
+For an axis $\alpha$ and target threshold $q^\star$, let $T_\alpha^{(d)}(q^\star,\delta)$ be the
+certified time required by architecture $d$ to reach latent-loss success with probability at least
+$1-\delta$ when measured on axis $\alpha$. The expected certified log-speedup relative to baseline
+$d_0$ is
+\[
+\Delta_\alpha(d \mid d_0)
+:=
+\log T_\alpha^{(d_0)}(q^\star,\delta)
+- \log T_\alpha^{(d)}(q^\star,\delta).
+\]
+\end{definition}
+
+\section{Where The Earlier Draft Was Too Fast}
+
+The earlier draft relied on BP correctly at the algebraic level, but it compressed three extra
+bridges that are not automatic:
+
+\begin{enumerate}
+\item BP Theorem 21 is indexed by a model-like object. AutoResearch varies a full architecture.
+\item BP uses a fixed per-step cost $\kappa(M)$. AutoResearch uses context-dependent cost
+      $\kappa_\alpha(d,\Xi)$ and then reports arithmetic means.
+\item The deployed verifier is noisy. One-shot observed loss is not the right theorem-level object.
+\end{enumerate}
+
+None of these issues kills the framework. But each requires either an explicit assumption or an
+explicit remainder term.
+
+\section{Revised Assumptions}
+
+\begin{assumption}[Architecture-indexed packed family]
+There exists a latent mode variable $S \in \{1,\dots,m\}$ for the AutoResearch task family such
+that, for each fixed axis $\alpha$ and architecture $d$, the pair $(S,d)$ defines a BP-style
+packed family with:
+\begin{enumerate}
+\item a mode posterior $\pi_{\alpha,D}^d$,
+\item a routing allocation $q_{\alpha,D}^d$,
+\item a within-mode certified scale $t_{0,\alpha}(d,s)$.
+\end{enumerate}
+This is the bridge from BP's model index to an architecture index.
+\end{assumption}
+
+\begin{assumption}[Latent-loss threshold regularity]
+The latent loss $L(y)$ is measurable and finite for all candidates of interest, and the event
+$\mathbf{1}\{L(y)\le q^\star\}$ is the theorem-level verification object.
+Observed noisy evaluations are unbiased but noisy measurements of this latent object and are not
+used directly inside the theorem statement.
+\end{assumption}
+
+\begin{assumption}[Axis-specific effective cost and reported mean cost]
+For each axis $\alpha$ and architecture $d$, there exists an exact effective BP-style cost factor
+$\tilde\kappa_\alpha(d) > 0$ such that the axis-specific certified time admits the BP log-time
+factorization
+\[
+T_{\alpha,q}^{(d)}(s)
+=
+\tilde\kappa_\alpha(d)\, c_{\mathrm{sim}}\, \frac{t_{0,\alpha}(d,s)}{q(s)}.
+\]
+In practice the experiment reports the arithmetic mean cost
+\[
+\bar\kappa_\alpha(d) := \mathbb{E}[\kappa_\alpha(d,\Xi)],
+\]
+where $\Xi$ denotes the run/path dependence induced by context pressure and solver dynamics.
+Define the Jensen gap
+\[
+J_\alpha(d) := \log \bar\kappa_\alpha(d) - \log \tilde\kappa_\alpha(d).
+\]
+Assume $J_\alpha(d)$ is finite.
+\end{assumption}
+
+\begin{remark}
+If $\tilde\kappa_\alpha(d)$ is taken as the geometric mean effective cost, then $J_\alpha(d)\ge 0$
+by Jensen's inequality. Under small within-architecture cost variance one expects
+\[
+J_\alpha(d)=O\!\left(\frac{\mathrm{Var}[\kappa_\alpha(d,\Xi)]}{\mathbb{E}[\kappa_\alpha(d,\Xi)]^2}\right),
+\]
+which is the quantity the protocol should estimate.
+\end{remark}
+
+\begin{assumption}[Prior-matched baseline]
+There exists a baseline architecture $d_0$ whose routing is prior-matched for the packed family
+used in the BP reduction.
+\end{assumption}
+
+\section{Strongest Current Theorem}
+
+\begin{theorem}[Conditional single-axis decomposition with Jensen remainder]
+Fix an axis $\alpha \in \{\mathrm{wall}, \mathrm{token}\}$.
+Under Assumptions 1--4, for any architecture $d$ compared against a prior-matched baseline $d_0$,
+the expected certified log-speedup satisfies
+\[
+\Delta_\alpha(d \mid d_0)
+=
+\log \frac{\bar\kappa_\alpha(d_0)}{\bar\kappa_\alpha(d)}
++ \phi_\alpha(d_0,d)
++ G_\alpha(d)
+- \epsilon_\alpha(d)
++ R_\alpha(d \mid d_0),
+\]
+where
+\[
+\phi_\alpha(d_0,d)
+:=
+\mathbb{E}_{S \sim \pi_\alpha}\!\left[
+\log \frac{t_{0,\alpha}(d_0,S)}{t_{0,\alpha}(d,S)}
+\right],
+\]
+\[
+G_\alpha(d)
+:=
+I_{\pi_\alpha}(S : D_\alpha^d),
+\]
+\[
+\epsilon_\alpha(d)
+:=
+\mathbb{E}_{D_\alpha}\!\left[
+\mathrm{KL}(\pi_{\alpha,D}^d \,\|\, q_{\alpha,D}^d)
+\right],
+\]
+and
+\[
+R_\alpha(d \mid d_0)
+:=
+J_\alpha(d)-J_\alpha(d_0).
+\]
+Equivalently, if the exact effective cost $\tilde\kappa_\alpha$ is reported instead of the arithmetic
+mean $\bar\kappa_\alpha$, the remainder vanishes and the BP four-term identity holds exactly on
+that axis.
+\end{theorem}
+
+\begin{proof}
+Fix an axis $\alpha$.
+By Assumption~3, the axis-specific certified time has the multiplicative form required by BP
+Theorem~21, with the architecture $d$ playing the role of BP's effective model index and with
+$\tilde\kappa_\alpha(d)$ playing the role of BP's per-step cost:
+\[
+\log T_{\alpha,q}^{(d)}(s)
+=
+\log \tilde\kappa_\alpha(d)
++
+\log c_{\mathrm{sim}}
++
+\log t_{0,\alpha}(d,s)
+-
+\log q(s).
+\]
+Applying BP Theorem~21 on this axis yields
+\[
+\Delta_\alpha(d \mid d_0)
+=
+\log \frac{\tilde\kappa_\alpha(d_0)}{\tilde\kappa_\alpha(d)}
++ \phi_\alpha(d_0,d)
++ G_\alpha(d)
+- \epsilon_\alpha(d).
+\]
+By the definition of the Jensen gap,
+\[
+\log \tilde\kappa_\alpha(d)
+=
+\log \bar\kappa_\alpha(d) - J_\alpha(d),
+\]
+so substituting for both $d_0$ and $d$ gives
+\[
+\log \frac{\tilde\kappa_\alpha(d_0)}{\tilde\kappa_\alpha(d)}
+=
+\log \frac{\bar\kappa_\alpha(d_0)}{\bar\kappa_\alpha(d)}
++ J_\alpha(d)-J_\alpha(d_0).
+\]
+This is exactly the stated decomposition with remainder
+$R_\alpha(d \mid d_0)=J_\alpha(d)-J_\alpha(d_0)$.
+\end{proof}
+
+\begin{remark}[Why the theorem is single-axis]
+The earlier revised note assumed that $\phi$, $G$, and $\epsilon$ are shared across wall-clock and
+cost axes. That may still be a good approximation, but it is not needed for the theorem and is not
+yet verified empirically. The stronger shared-axes statement should therefore be treated as a
+\emph{future corollary} that requires additional evidence, not as part of the base theorem.
+\end{remark}
+
+\begin{corollary}[Shared-axis corollary, conditional]
+If future work shows that the same mode partition, posterior family, and routing allocations are
+valid on both axes and that the within-mode certified scales are axis-invariant up to pricing, then
+\[
+\phi_{\mathrm{wall}}=\phi_{\mathrm{token}},\qquad
+G_{\mathrm{wall}}=G_{\mathrm{token}},\qquad
+\epsilon_{\mathrm{wall}}=\epsilon_{\mathrm{token}},
+\]
+and the two-axis statement from the earlier draft follows by applying the single-axis theorem to
+each axis separately.
+\end{corollary}
+
+\section{Claim Status Table}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{p{0.31\linewidth} p{0.2\linewidth} p{0.39\linewidth}}
+\toprule
+Item & Status & Meaning in this note \\
+\midrule
+BP four-term algebra for packed families & Proved algebra & Inherited from BP Theorem 21 once the architecture-indexed packed family exists. \\
+\addlinespace
+Architecture index replacing BP model index & Structural assumption & Stated explicitly as Assumption 1. \\
+\addlinespace
+Threshold success on latent loss & Structural assumption & The theorem is written on latent-loss threshold success, not one-shot noisy evaluations. \\
+\addlinespace
+Arithmetic mean cost replacing exact effective cost & Structural assumption plus remainder & Captured by Assumption 3 and the Jensen remainder $R_\alpha$. \\
+\addlinespace
+Axis sharing of $\phi$, $G$, $\epsilon$ & Pending corollary & Not assumed in the base theorem; requires extra evidence. \\
+\addlinespace
+Estimators recover $\phi$, $G$, $\epsilon$ & Estimation assumption & Not part of the theorem; current implementation does not satisfy it. \\
+\addlinespace
+H1--H5 style pilot predictions & Empirical hypotheses & Must be tested experimentally; they are not theorem-level consequences. \\
+\bottomrule
+\end{tabular}
+\caption{What is proved, assumed, or still empirical in the current formulation.}
+\end{table}
+
+\section{Empirical Consequences}
+
+The theorem does not by itself prove the pilot hypotheses; it organizes them.
+For the 2x2 design the most relevant empirical questions remain:
+
+\begin{enumerate}
+\item whether parallelism improves wall-clock certified time enough to offset coordination costs;
+\item whether external memory lowers effective cost by relieving context pressure;
+\item whether shared memory lowers routing mismatch relative to independent parallel agents;
+\item whether the sign of the parallelism contrast flips across axes;
+\item whether higher context pressure measurably enlarges the Jensen gap and effective cost.
+\end{enumerate}
+
+These are empirical hypotheses, not theorem-level corollaries.
+
+\section{Validation Status On The Current Repository}
+
+The repository already contains a 12-run CPU pilot and a follow-up noise assay.
+The present evidence should be summarized as follows.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{p{0.33\linewidth} p{0.57\linewidth}}
+\toprule
+Question & Status on current repository evidence \\
+\midrule
+Is the BP reduction structurally credible? &
+Yes, once the architecture, latent-loss, and cost assumptions are stated explicitly. \\
+\addlinespace
+Was the full four-term decomposition identified? &
+No. In the current pilot, $\phi$ is hardcoded to zero and the implemented $G,\epsilon$ estimators are degenerate. \\
+\addlinespace
+Was the stronger two-axis shared-term statement validated? &
+No. The current evidence does not justify axis-sharing for $\phi$, $G$, or $\epsilon$. \\
+\addlinespace
+Was the latent-loss layer operationally necessary? &
+Yes. Repeated evaluations show large noise and strong best-of-many optimism. \\
+\addlinespace
+Was the original cost axis reproduced literally? &
+No. The CPU substrate uses token-only cost and drops GPU pricing by design. \\
+\bottomrule
+\end{tabular}
+\caption{Validation status of the current repository evidence.}
+\end{table}
+
+\subsection{Noise assay}
+
+To test whether the latent-loss layer is genuinely needed, the baseline training configuration was
+repeated five times and the pilot-selected best $d_{10}$ candidate was repeated five times.
+
+\begin{center}
+\begin{tabular}{lccccc}
+\toprule
+Config & Mean val\_bpb & Std & Range & Pilot best & Replicated? \\
+\midrule
+Baseline & 0.8246 & 0.0359 & 0.0930 & --- & --- \\
+Best $d_{10}$ candidate & 0.8694 & 0.0501 & 0.1198 & 0.7554 & No \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The pilot-selected best $d_{10}$ commit did \emph{not} replicate:
+its repeated-evaluation mean was about $0.114$ worse than the pilot-reported best value.
+This is consistent with strong selection bias under noisy one-shot evaluation.
+
+\subsection{Deterministic Phase 02 calibration update}
+
+After the original pilot-and-noise pass, the repository was upgraded with a deterministic
+calibration workflow on the CPU CIFAR-10 substrate. The completed Phase~02 comparison was the
+single-agent control $d_{00}$ versus the single-agent external-memory architecture $d_{10}$.
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+Metric & $d_{00}$ & $d_{10}$ \\
+\midrule
+Best-of-rep mean val\_bpb & 0.8905 & 0.9151 \\
+All-runs mean val\_bpb & 1.0026 & 1.0127 \\
+Total training runs & 47 & 69 \\
+Mean runs / replicate & 9.4 & 13.8 \\
+Modes with $\ge 2$ accepted edits & 1 & 1 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+These results sharpen the empirical status in an important way.
+
+\begin{enumerate}
+\item On the descriptive best-of-replicate view, $d_{10}$ still does not outperform $d_{00}$.
+      If anything, the difference points in the wrong direction for the simple memory-helps story.
+\item On the stricter all-runs view with current post-hoc labeling, the quality effect is
+      negligible.
+\item $d_{10}$ does appear to improve iteration throughput: it produces more runs per replicate.
+\item The accepted-mode family remains too thin to count as empirical identification of the full
+      $\phi + G - \epsilon$ package.
+\end{enumerate}
+
+So the deterministic calibration supports a more refined reading:
+\emph{memory may help the cost / throughput channel without helping the quality channel}.
+That is perfectly compatible with the revised theorem, which separates cost accounting from the
+other terms, but it does \emph{not} count as validation of the full four-term decomposition.
+
+The repository therefore contains a genuine decision split:
+the descriptive best-of-replicate workflow summary justified an exploratory move to the parallel
+$d_{01}$ / $d_{11}$ cells, while the stricter accepted-mode gate still points toward
+structured search as the cleaner next step.
+Those later parallel runs should be read as exploratory override evidence, not as a calibration
+gate that has been cleanly passed.
+
+\section{What Is Validated vs. Pending}
+
+\subsection*{Validated in this revision}
+
+\begin{itemize}
+\item The strongest current theorem is a conditional single-axis BP reduction with an explicit
+      Jensen remainder.
+\item The empirical setting requires a latent-loss/repeated-evaluation layer.
+\item The current pilot provides some signal on cost-channel differences across architectures.
+\end{itemize}
+
+\subsection*{Still pending}
+
+\begin{itemize}
+\item a non-degenerate operational mode definition with full labeling coverage;
+\item correct estimators for $\phi_\alpha$, $G_\alpha$, and $\epsilon_\alpha$;
+\item direct estimation of the Jensen gap through within-architecture cost variance;
+\item a disciplined repeated-evaluation protocol integrated into architecture comparison;
+\item a genuine context-pressure sweep that enters higher $c/K$ regimes.
+\end{itemize}
+
+\section{Conclusion}
+
+The earlier AutoResearch note was directionally right but too compressed to count as a rigorous
+theorem statement. This revision narrows the claim deliberately:
+
+\begin{enumerate}
+\item the theorem is written on threshold success for latent loss;
+\item the strongest theorem is single-axis, not two-axis shared by default;
+\item replacing exact effective cost by arithmetic mean cost incurs an explicit remainder;
+\item the estimator layer is separate from the theorem and is not yet validated.
+\end{enumerate}
+
+The correct research posture is therefore:
+
+\begin{quote}
+keep the decomposition, narrow the theorem, repair the estimators and protocol, and only then ask
+whether the full empirical decomposition is identifiable.
+\end{quote}
+
+\section*{References}
+
+\begin{enumerate}
+\item P. Beneventano and T. Poggio. \emph{A Mathematical Framework for Building Agent Systems:
+Task-First Design, Equivalence, and Model Choice under Deployment Budgets}. Under review, 2026.
+\item Original AutoResearch note in this repository: \texttt{autoresearch\_bp.pdf}.
+\item Repository validation bundle: \texttt{theory\_validation\_bp\_20260412/}.
+\end{enumerate}
+
+\end{document}
