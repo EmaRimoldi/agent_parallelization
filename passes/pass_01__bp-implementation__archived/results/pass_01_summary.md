@@ -173,6 +173,10 @@ Note: parallel cells (d01, d11) produce ~2.5x more training attempts because two
 
 **Figure 1 interpretation**: The error bars and scatter points reveal that d10 (memory) has the lowest mean but also the widest spread — two reps cluster near 0.755-0.761 while a third sits at 0.829, suggesting a bimodal outcome where memory either "clicks" and produces a large gain or fails to help at all. In contrast, d11 (parallel + memory) shows remarkably tight clustering (all 3 reps within 0.796-0.804), but its mean is not lower than d00. This hints that memory's benefit in d10 may depend on lucky initialization rather than a robust mechanism. The d01 bar sits above the d00 baseline, confirming that parallelism alone hurts — but the scatter shows one rep at 0.802 (comparable to d00) and another at 0.837, so the damage is also inconsistent. With only 3 points per cell, none of these differences would survive a significance test; the figure is best read as generating hypotheses, not confirming them.
 
+![Best-so-far curves](figures/fig05_best_so_far_curves.png)
+
+**Figure 5 interpretation**: The optimization trajectories (averaged across 3 reps) show best val_bpb as a function of cumulative Claude API tokens. d10 (memory, teal) improves fastest and reaches the lowest plateau (~0.782) with the fewest tokens (~10K). d00 (baseline, dark blue) plateaus early at ~0.809 with ~15K tokens. Both parallel cells (d01 red, d11 gold) consume 2-3x more tokens (60-90K) due to two agents running simultaneously, but d01 never drops below d00 — the extra tokens are wasted on contention-degraded training. d11 eventually drops below d00 (~0.800) but only after ~35K tokens, suggesting shared memory helps but slowly. The key insight: token efficiency (val_bpb improvement per token) is highest for d10, not for parallel cells — more agents does not mean faster convergence when hardware is constrained.
+
 ### 2. Exploratory Runs
 
 All exploratory runs use claude-haiku-4-5, 10-minute budget, 120s per training attempt.
