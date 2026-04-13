@@ -74,6 +74,40 @@ The agent follows a one-change-per-turn strategy, guided by its memory of previo
 
 **Tokens consumed**: This counts **Claude API tokens** (input + output) used by the LLM agent during its autonomous loop — how much "thinking" the agent did. It is NOT related to training data tokens. Counted from the API usage response when available, or estimated as characters/4 as fallback. Parallel cells consume roughly 2x more tokens because two agents run simultaneously.
 
+### Memory configurations
+
+The 2x2 design tests two types of memory, both injected as text prepended to the agent's input message at each turn:
+
+**External memory (d10 — single agent)**:
+A private experiment log table built from `training_runs.jsonl`. The agent sees a compact markdown table of all its previous training attempts:
+
+```
+# Experiment Log
+| # | change                  | bpb    | delta   | best |
+|---|-------------------------|--------|---------|------|
+| 1 | increase BASE_CHANNELS  | 0.8271 | —       | ✓    |
+| 2 | lower LR to 5e-4       | 0.8004 | -0.0267 | ✓    |
+| 3 | add dropout 0.1         | 0.8312 | +0.0308 |      |
+```
+
+This gives the agent a structured history of what it tried and what worked, replacing the implicit memory that would otherwise accumulate (and degrade) in the growing conversation context. The table is rebuilt from the monitoring log at each turn, so it is always complete and accurate.
+
+**Shared memory (d11 — parallel agents)**:
+A cross-agent experiment log built from `shared_results_log.jsonl`. Both agents write to the same JSONL file (with file locking) after each training run, and both read it before each turn:
+
+```
+# Shared Experiment Log (all agents)
+| agent | # | change                  | bpb    | kept |
+|-------|---|-------------------------|--------|------|
+| ag_0  | 1 | lower LR to 5e-4       | 0.8012 | ✓    |
+| ag_1  | 1 | increase depth to 4     | 0.8449 | ✗    |
+| ag_0  | 2 | add weight decay 5e-4   | 0.7962 | ✓    |
+```
+
+This lets each agent see what the other has tried, ideally reducing duplicated exploration. The shared log is stored as a symlink inside each agent's git worktree, pointing to the experiment-level shared file.
+
+**No memory (d00, d01)**: The agent receives only its current budget status and task description. Previous attempts are visible only through the growing conversation context, which degrades as the context window fills up.
+
 Three experiment classes were run:
 
 ### 1. Pilot 2x2 feasibility — 12 runs (4 cells x 3 reps)
@@ -190,9 +224,30 @@ This study isolates CPU contention by running identical 2-second training tasks 
 
 **Figure 2 interpretation**: The left panel shows both policies diverge sharply from the ideal linear speedup after N=2, plateauing around 3x at N=8. The right panel reveals the cost: default-policy val_bpb degrades nearly linearly with N (~0.033 per doubling). The partitioned policy flattens the curve at N=2 (no quality loss) but converges with default at higher N, where there simply aren't enough cores per agent (1 core at N=8 vs 10 at N=1). The key takeaway is that for the pilot's N=2 (d01/d11), the contention penalty is real but modest (~2% val_bpb degradation with default policy, near-zero with partitioning). This means the d01/d11 quality gap vs d00/d10 in the pilot is partly but not entirely explained by contention — some signal may remain.
 
+### 4. Edit Category Distribution
+
+The decomposition terms phi, G, and epsilon depend on classifying each agent edit into categories (optimizer, regularization, architecture, data_pipeline, other). The mode labeling script analyzes the git diff and the agent's stated hypothesis to assign a category. Here is the distribution across all pilot runs:
+
+| Cell | Total proposed | optimizer | regularization | architecture | data_pipeline | other | Total accepted |
+|------|---------------|-----------|----------------|--------------|---------------|-------|---------------|
+| d00  | 6             | 0         | 0              | 4            | 2             | 0     | 0             |
+| d10  | 12            | 2         | 6              | 2            | 0             | 2     | 0             |
+| d01  | 20            | 4         | 12             | 4            | 0             | 0     | 6             |
+| d11  | 16            | 10        | 6              | 0            | 0             | 0     | 0             |
+
+![Mode distribution](figures/fig04_mode_distribution.png)
+
+**Figure 4 interpretation**: This figure explains why the KL divergence terms (G and epsilon) collapsed to zero. Two problems are visible:
+
+1. **Low category diversity**: Each cell is dominated by 1-2 categories. d11 is 63% optimizer, d01 is 60% regularization, d10 is 50% regularization. When distributions are this concentrated, the KL divergence between them is small — there isn't enough "spread" across categories for information-theoretic measures to detect differences.
+
+2. **Near-zero acceptance rate**: Only d01 had any accepted edits (6 out of 20 proposed), and the other three cells had zero acceptances. The epsilon estimator compares accepted vs proposed distributions — with 0 acceptances, it is undefined (falls back to 0). The phi estimator requires accepted edits in both the baseline and design cell — with d00 having 0 acceptances, phi is undefined for every comparison.
+
+**Root cause**: The agents mostly explored a narrow hyperparameter subspace (learning rate and regularization tweaks), and the 120-second training budget was often too short for changes to produce measurable improvements — hence few acceptances. The mode labeling system works correctly, but the experiment did not generate enough diverse, successful edits to feed the decomposition estimators.
+
 ## Answers to the Research Question
 
-**Can the BP decomposition produce measurable terms?** Partially. The cost term log(kappa_0/kappa) was measurable but noisy. The phi, G, and epsilon terms were all zero or near-zero in the pilot — the instrumentation for mode labeling and information gain did not produce enough signal at this scale. The decomposition reduced to a single-term approximation (cost only), which is too simple to be useful.
+**Can the BP decomposition produce measurable terms?** Partially. The cost term log(kappa_0/kappa) was measurable but noisy. The phi, G, and epsilon terms were all zero or near-zero in the pilot — the instrumentation for mode labeling and information gain did not produce enough signal at this scale (see Figure 4: near-zero acceptance rates and low category diversity). The decomposition reduced to a single-term approximation (cost only), which is too simple to be useful.
 
 **Hypothesis verdicts** (out of 3 reps supporting each):
 - H1 (parallelism helps wall-clock only): **1/3** — inconsistent
