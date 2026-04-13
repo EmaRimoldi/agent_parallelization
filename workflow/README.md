@@ -2,6 +2,8 @@
 
 Phase-based execution system for validating the BP four-term decomposition applied to AutoResearch agent architectures.
 
+This directory belongs to **AI Pass 02**. It is the orchestration and gating layer for the second-pass calibration / continuation experiments, not a separate pass.
+
 ## Quick Start
 
 ```bash
@@ -106,6 +108,8 @@ workflow/
 ├── results/               ← Final analysis results
 └── reports/               ← Generated reports
 ```
+
+Canonical figures for workflow phases are stored outside this directory in [`../results/figures/pass_02_workflow_calibration/`](../results/figures/pass_02_workflow_calibration/) so that all repository figures live under one archive root.
 
 ## Typical Session
 

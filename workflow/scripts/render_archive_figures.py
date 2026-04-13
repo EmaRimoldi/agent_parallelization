@@ -16,7 +16,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 
 ROOT = Path(__file__).resolve().parents[2]
-OUT_DIR = ROOT / "docs" / "figures"
+OUT_DIR = ROOT / "results" / "figures" / "pass_02_archive_overview"
 
 
 def load_json(path: Path) -> dict:

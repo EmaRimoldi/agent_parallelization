@@ -13,7 +13,7 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-DOCS_DIR = REPO_ROOT / "docs" / "figures"
+FIGURES_DIR = REPO_ROOT / "results" / "figures" / "pass_02_workflow_calibration"
 
 
 def load_json(path: Path) -> dict:
@@ -134,7 +134,7 @@ def render_gate_figure(best_d: float, all_runs_d: float, accepted_repeat_d00: in
 def main() -> None:
     phase02 = load_json(REPO_ROOT / "workflow" / "artifacts" / "calibration_analysis.json")
     rigorous = load_json(REPO_ROOT / "workflow" / "artifacts" / "calibration_analysis_current.json")
-    DOCS_DIR.mkdir(parents=True, exist_ok=True)
+    FIGURES_DIR.mkdir(parents=True, exist_ok=True)
 
     quality_svg = render_quality_figure(
         best_d00=phase02["cells"]["d00"]["best_per_rep_mean"],
@@ -157,10 +157,10 @@ def main() -> None:
         accepted_repeat_d10=rigorous["d10"]["modes_with_2plus_accepted"],
     )
 
-    (DOCS_DIR / "phase02_quality.svg").write_text(quality_svg)
-    (DOCS_DIR / "phase02_behavior.svg").write_text(behavior_svg)
-    (DOCS_DIR / "phase02_gate.svg").write_text(gate_svg)
-    print("Wrote README figures to", DOCS_DIR)
+    (FIGURES_DIR / "phase02_quality.svg").write_text(quality_svg)
+    (FIGURES_DIR / "phase02_behavior.svg").write_text(behavior_svg)
+    (FIGURES_DIR / "phase02_gate.svg").write_text(gate_svg)
+    print("Wrote Phase 02 README figures to", FIGURES_DIR)
 
 
 if __name__ == "__main__":

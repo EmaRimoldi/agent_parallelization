@@ -46,11 +46,11 @@ Index:
 
 This is the repository-level flow of what has been done so far:
 
-![Experiment archive flow](docs/figures/experiment_archive_flow.png)
+![Experiment archive flow](results/figures/pass_02_archive_overview/experiment_archive_flow.png)
 
 And this is the compact numerical summary of the main experiment families:
 
-![Experiment archive summary](docs/figures/experiment_archive_summary.png)
+![Experiment archive summary](results/figures/pass_02_archive_overview/experiment_archive_summary.png)
 
 ## Experimental Design
 
@@ -111,7 +111,7 @@ This is the original 2x2 pilot produced by the first AI pass.
   [`results/decomposition_rep2.json`](results/decomposition_rep2.json),
   [`results/decomposition_rep3.json`](results/decomposition_rep3.json)
 - original pilot figures:
-  [`results/pilot_figures/`](results/pilot_figures/)
+  [`results/figures/pass_01_pilot/`](results/figures/pass_01_pilot/)
 
 #### Pilot snapshot
 
@@ -126,7 +126,7 @@ This pass established the first version of the artifact stack, but the decomposi
 
 Pilot figure example:
 
-![Original pilot decomposition](results/pilot_figures/decomposition_bar_chart.png)
+![Original pilot decomposition](results/figures/pass_01_pilot/decomposition_bar_chart.png)
 
 ### 2. Pass 02 theory-validation follow-ups
 
@@ -192,6 +192,8 @@ This pass is what changed the interpretation from “pilot looked promising” t
 
 The second AI pass also owns the later workflowized calibration and current continuation work under [`workflow/`](workflow/).
 
+`workflow/` is not a third experimental pass. It is the **Pass 02 orchestration layer** that added phase-based calibration, decision gates, prompts, and artifact collection around the second-pass experiments.
+
 #### Workflow phases
 
 The workflow DAG lives under [`workflow/phases/`](workflow/phases/).
@@ -222,7 +224,7 @@ The workflow DAG lives under [`workflow/phases/`](workflow/phases/).
 - run index: [`workflow/artifacts/calibration_runs.json`](workflow/artifacts/calibration_runs.json)
 - decision rationale: [`workflow/artifacts/decision_gate_rationale.md`](workflow/artifacts/decision_gate_rationale.md)
 - session notes / handoff: [`workflow/artifacts/codex_session_notes.md`](workflow/artifacts/codex_session_notes.md)
-- figure pack: [`workflow/artifacts/figures/`](workflow/artifacts/figures/)
+- canonical figure pack: [`results/figures/pass_02_workflow_calibration/`](results/figures/pass_02_workflow_calibration/)
 
 #### Calibration snapshot
 
@@ -243,7 +245,7 @@ Important note:
 
 Workflow figure example:
 
-![Phase 02 main comparison](workflow/artifacts/figures/figure-01-main-comparison.png)
+![Phase 02 main comparison](results/figures/pass_02_workflow_calibration/figure-01-main-comparison.png)
 
 ## Pass-to-Experiment / Result Mapping
 
@@ -299,19 +301,20 @@ This table is the main traceability map between AI passes and artifact families.
 | [`ai_task_passes/`](ai_task_passes/) | unified archive of the two AI task passes |
 | [`autoresearch/`](autoresearch/) | CIFAR-10 CPU substrate and evaluation target |
 | [`configs/`](configs/) | YAML configs for `d00`, `d10`, `d01`, `d11` |
-| [`docs/`](docs/) | diagrams, figures, protocol notes, archive images |
+| [`docs/`](docs/) | guides and handoff notes |
 | [`docs/guides/`](docs/guides/) | implementation guide, substrate guide, and pilot protocol moved out of root |
 | [`docs/handoffs/`](docs/handoffs/) | reviewer-facing entry points and handoff notes moved out of root |
-| [`results/`](results/) | original pilot aggregate outputs |
+| [`results/`](results/) | aggregate outputs plus the unified figure archive under `results/figures/` |
 | [`runs/`](runs/) | raw smoke, pilot, and calibration experiment directories |
 | [`scripts/`](scripts/) | labeling, decomposition, experiment helpers |
 | [`src/`](src/) | experiment engine and instrumentation |
 | [`archives/pass_02_theory_validation_bundle_20260412/`](archives/pass_02_theory_validation_bundle_20260412/) | self-contained validation and reviewer bundle |
-| [`workflow/`](workflow/) | later workflow DAG, calibration artifacts, decision notes |
+| [`workflow/`](workflow/) | Pass 02 workflow DAG, calibration scripts, prompts, and decision artifacts |
 
 ## Notes
 
 - The repository now treats **task passes** as first-class archival structure.
 - Pass 01 owns the original implementation and pilot.
 - Pass 02 owns the theorem cleanup, targeted follow-ups, workflow calibration, and ongoing second-pass exploration.
+- All tracked figures now live under [`results/figures/`](results/figures/) and are split by pass / phase.
 - The strict current conclusion is still: **promising but not yet rigorous**.

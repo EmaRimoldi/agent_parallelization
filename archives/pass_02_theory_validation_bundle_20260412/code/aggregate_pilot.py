@@ -381,7 +381,7 @@ def maybe_generate_figures(
     except Exception:
         return []
 
-    figures_dir = output_dir / "pilot_figures"
+    figures_dir = output_dir / "figures" / "pass_01_pilot"
     figures_dir.mkdir(parents=True, exist_ok=True)
     generated = []
 
@@ -722,7 +722,7 @@ def main() -> None:
     print(f"Wrote {args.output_dir / 'pilot_summary.md'}")
     print(f"Wrote {args.output_dir / 'pilot_raw_data.json'}")
     if figure_paths:
-        print(f"Generated {len(figure_paths)} figure(s) under {args.output_dir / 'pilot_figures'}")
+        print(f"Generated {len(figure_paths)} figure(s) under {args.output_dir / 'figures' / 'pass_01_pilot'}")
 
 
 if __name__ == "__main__":

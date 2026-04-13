@@ -4,6 +4,8 @@
 
 This document is to be executed AFTER all Tasks (0–8) from `docs/guides/IMPLEMENTATION_GUIDE.md` are complete and committed. It has three phases: validate the instrumentation works end-to-end, run a miniature 2×2 pilot, and produce a first draft of results with the four-term decomposition.
 
+Tracked pilot figures are archived under `results/figures/pass_01_pilot/`.
+
 ---
 
 ## Phase 1: Validation — does everything work?
@@ -300,10 +302,11 @@ results/
 ├── decomposition_rep3.json
 ├── pilot_summary.md          # main results document
 ├── pilot_raw_data.json       # all per-turn, per-run data aggregated
-└── pilot_figures/             # optional: plots if matplotlib is available
-    ├── kappa_by_context_bin.png
-    ├── best_so_far_curves.png
-    └── decomposition_bar_chart.png
+└── figures/
+    └── pass_01_pilot/        # optional: plots if matplotlib is available
+        ├── kappa_by_context_bin.png
+        ├── best_so_far_curves.png
+        └── decomposition_bar_chart.png
 ```
 
 ### 3.5 Figures (optional but recommended if matplotlib is available)
