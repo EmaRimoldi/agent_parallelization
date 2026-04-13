@@ -1,0 +1,14 @@
+[
+  {
+    "probe_id": "P14",
+    "experiment_id": "probe_P14",
+    "name": "hightemp_memory",
+    "description": "Single + memory, temp=1.2, 30 min (test memory + high temp)",
+    "variable": "high temperature overcoming memory anchoring",
+    "status": "no_results",
+    "returncode": 0,
+    "elapsed_seconds": 1003.7,
+    "n_runs": 0,
+    "best_val_bpb": null
+  }
+]

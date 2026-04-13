@@ -27,6 +27,8 @@ passes/*/results/
 !passes/pass_02__theory-validation__superseded/results/**
 !passes/pass_03__calibration-design__superseded/results/
 !passes/pass_03__calibration-design__superseded/results/**
+!passes/pass_04__bp-4term-probing__active/results/
+!passes/pass_04__bp-4term-probing__active/results/**
 
 # External repos
 agents-swarms/
