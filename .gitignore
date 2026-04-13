@@ -10,7 +10,11 @@ venv/
 
 # Runs and experiment outputs
 runs/
-results/
+**/results/*
+!results/
+!results/imported_swarms/
+!results/imported_swarms/**
+agents-swarms/
 autoresearch/data/
 workflow/logs/
 ai_task_passes/pass_02_theory_formalization/.runner_state/

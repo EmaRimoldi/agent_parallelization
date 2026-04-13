@@ -1,7 +1,7 @@
 [project]
 name = "agent-parallelization-new"
 version = "0.1.0"
-description = "Parallel agent experiment framework using Claude Code sub-agents"
+description = "Experiment framework for a mathematical theory of agentic systems"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -17,6 +17,7 @@ run-parallel = "agent_parallelization_new.launcher:main_parallel"
 run-parallel-shared = "agent_parallelization_new.launcher:main_parallel_shared"
 run-single-long = "agent_parallelization_new.launcher:main_single_long"
 run-single-memory = "agent_parallelization_new.launcher:main_single_memory"
+run-imported-swarm = "agent_parallelization_new.imported_swarms.launcher:main_imported_swarm"
 
 [build-system]
 requires = ["hatchling"]

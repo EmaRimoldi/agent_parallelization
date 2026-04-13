@@ -1,6 +1,6 @@
-# BP 2x2 Instrumentation on AutoResearch
+# Mathematical Theory of Agentic Systems
 
-This repository is the code, experiment archive, and theory bundle for a BP-style decomposition study on autonomous coding agents.
+This repository is the code, experiment archive, and theory bundle for a mathematical theory of agentic systems, currently centered on a BP-style decomposition study of autonomous coding agents.
 
 The central research question is whether AutoResearch-style agent architectures can be analyzed through a BP decomposition of the form
 

@@ -21,6 +21,7 @@ There are two kinds of config files:
 | [`experiment_d10.yaml`](experiment_d10.yaml) | single-agent external-memory cell | `mode: single_memory`, `use_external_memory: true` |
 | [`experiment_d01.yaml`](experiment_d01.yaml) | two-agent parallel cell | `mode: parallel`, `n: 2`, no shared memory |
 | [`experiment_d11.yaml`](experiment_d11.yaml) | two-agent shared-memory cell | `mode: parallel_shared`, `n: 2`, `use_shared_memory: true` |
+| [`imported_swarms/experiment_imported_swarm.yaml`](imported_swarms/experiment_imported_swarm.yaml) | imported agents-swarms blackboard mode | additive `mode: imported_swarm`; does not replace `d11` |
 
 ## How To Read These Configs
 
@@ -61,3 +62,4 @@ If you are trying to understand an old experiment, always cross-check:
 - For a readable reference of all supported options, start with [`experiment.yaml`](experiment.yaml).
 - For local CPU substrate work, start with [`experiment_cifar10.yaml`](experiment_cifar10.yaml).
 - For the 2x2 cells, use the specific `experiment_d00.yaml` through `experiment_d11.yaml` files.
+- For the imported blackboard swarm prototype, use [`imported_swarms/experiment_imported_swarm.yaml`](imported_swarms/experiment_imported_swarm.yaml).

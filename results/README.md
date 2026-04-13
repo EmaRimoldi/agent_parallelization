@@ -1,6 +1,6 @@
 # Results
 
-This directory contains the canonical tracked outputs of the **Pass 01 original 2x2 pilot**, plus the unified figure archive used across the repository.
+This directory contains the canonical tracked outputs of the **Pass 01 original 2x2 pilot**, the unified figure archive used across the repository, and imported historical swarm-analysis artifacts.
 
 It is intentionally narrower than the rest of the repo:
 
@@ -18,6 +18,7 @@ It is intentionally narrower than the rest of the repo:
 | [`decomposition_rep2.json`](decomposition_rep2.json) | second repetition decomposition output |
 | [`decomposition_rep3.json`](decomposition_rep3.json) | third repetition decomposition output |
 | [`figures/`](figures/) | repository-wide tracked figure archive, now split by pass / phase |
+| [`imported_swarms/`](imported_swarms/) | historical analyses moved from the cloned `agents-swarms` repository |
 
 ## Important Interpretation Note
 
@@ -37,6 +38,20 @@ If you are looking for something else, use this map:
 - workflow calibration and decision-gate artifacts: [`../workflow/artifacts/`](../workflow/artifacts/)
 - full second-pass theory-validation bundle: [`../archives/pass_02_theory_validation_bundle_20260412/`](../archives/pass_02_theory_validation_bundle_20260412/)
 - figure index: [`figures/README.md`](figures/README.md)
+- imported swarm analyses: [`imported_swarms/README.md`](imported_swarms/README.md)
+
+## Imported Swarm Results
+
+[`imported_swarms/`](imported_swarms/) contains the historical results that were originally under `agents-swarms/analysis/`.
+
+These are related to the current experiments, but they are not the same BP 2x2 evidence set:
+
+- Similarity: they study two agents optimizing `val_bpb` with shared information.
+- Difference: they use an explicit swarm blackboard with claim / publish / pull-best coordination, whereas native `d11` uses the current repo's lighter `parallel_shared` log and prompt-injection mechanism.
+- Difference: they include a model comparison across Haiku, Sonnet, and Opus in a 2-agent swarm setup.
+- Difference: their historical budgets and raw-run assumptions differ from the current tracked `d00` / `d10` / `d01` / `d11` configs.
+
+Treat them as archived swarm evidence and context for the imported blackboard implementation, not as directly normalized rows in the current BP 2x2 decomposition.
 
 ## Figures
 
