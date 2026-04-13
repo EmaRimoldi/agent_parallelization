@@ -20,6 +20,10 @@ passes/*/results/
 !passes/pass_00__swarms__archived/results/
 !passes/pass_00__swarms__archived/results/**
 
+# Exceptions: track pass summaries and figures (small, curated)
+!passes/pass_01__bp-implementation__archived/results/
+!passes/pass_01__bp-implementation__archived/results/**
+
 # External repos
 agents-swarms/
 autoresearch/data/
