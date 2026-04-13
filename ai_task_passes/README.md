@@ -16,13 +16,13 @@ This directory groups the two major agentic task passes that produced the curren
 | AI pass | What the pass did | Main experiment families | Main outputs |
 | --- | --- | --- | --- |
 | `pass_01_bp_implementation` | built the CIFAR-10 substrate, mode routing, memory / parallel modes, decomposition scripts, and original pilot workflow | pre-pilot smoke runs, original 2x2 pilot | `autoresearch/`, `configs/`, `scripts/`, `runs/experiment_exp_*`, `runs/experiment_pilot_*`, `results/`, `runs/pilot_mapping.json` |
-| `pass_02_theory_formalization` | narrowed the theorem, upgraded protocol/logging, repaired estimators, and reran targeted validation experiments | noise assay, replicated incumbent means, cost variance, context feasibility, deterministic calibration, d00/d10 workflow gate, ongoing second-pass exploration | `theory_validation_bp_20260412/`, `workflow/`, `theory_validation_bp_20260412/theory/autoresearch_bp_revised.pdf`, `runs/experiment_calibration_*` |
+| `pass_02_theory_formalization` | narrowed the theorem, upgraded protocol/logging, repaired estimators, and reran targeted validation experiments | noise assay, replicated incumbent means, cost variance, context feasibility, deterministic calibration, d00/d10 workflow gate, ongoing second-pass exploration | `archives/pass_02_theory_validation_bundle_20260412/`, `workflow/`, `archives/pass_02_theory_validation_bundle_20260412/theory/autoresearch_bp_revised.pdf`, `runs/experiment_calibration_*` |
 
 ## Traceability Rule
 
 If you want to know why an experiment or result exists:
 
-1. identify the artifact family under `results/`, `workflow/`, `theory_validation_bp_20260412/`, or `runs/`
+1. identify the artifact family under `results/`, `workflow/`, `archives/pass_02_theory_validation_bundle_20260412/`, or `runs/`
 2. map it to the AI pass above
 3. open the task Markdown files inside that pass to see the exact implementation or validation instructions that created it
 

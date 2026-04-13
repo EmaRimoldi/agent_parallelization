@@ -10,9 +10,9 @@ Tighten the theory so that every formal claim is either:
 
 ## Inputs
 
-- `theory_validation_bp_20260412/theory/autoresearch_bp_revised.tex`
-- `theory_validation_bp_20260412/analysis/formal_theory_audit.md`
-- `theory_validation_bp_20260412/theory/BP.pdf`
+- `archives/pass_02_theory_validation_bundle_20260412/theory/autoresearch_bp_revised.tex`
+- `archives/pass_02_theory_validation_bundle_20260412/analysis/formal_theory_audit.md`
+- `archives/pass_02_theory_validation_bundle_20260412/theory/BP.pdf`
 
 ## Required Work
 
@@ -39,10 +39,10 @@ Tighten the theory so that every formal claim is either:
 
 At minimum:
 
-- updated `theory_validation_bp_20260412/theory/autoresearch_bp_revised.tex`
-- regenerated `theory_validation_bp_20260412/theory/autoresearch_bp_revised.pdf`
-- no duplicate root copy; the canonical PDF remains inside `theory_validation_bp_20260412/theory/`
-- new note `theory_validation_bp_20260412/analysis/theorem_refactor_summary.md`
+- updated `archives/pass_02_theory_validation_bundle_20260412/theory/autoresearch_bp_revised.tex`
+- regenerated `archives/pass_02_theory_validation_bundle_20260412/theory/autoresearch_bp_revised.pdf`
+- no duplicate root copy; the canonical PDF remains inside `archives/pass_02_theory_validation_bundle_20260412/theory/`
+- new note `archives/pass_02_theory_validation_bundle_20260412/analysis/theorem_refactor_summary.md`
 
 The summary note must say:
 

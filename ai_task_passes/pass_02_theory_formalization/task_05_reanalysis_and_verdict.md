@@ -28,8 +28,8 @@ Recompute the analysis after the protocol, estimator, and experiment upgrades an
 
 Update or create:
 
-- `theory_validation_bp_20260412/analysis/final_verdict.md`
-- `theory_validation_bp_20260412/analysis/reanalysis_summary.md`
+- `archives/pass_02_theory_validation_bundle_20260412/analysis/final_verdict.md`
+- `archives/pass_02_theory_validation_bundle_20260412/analysis/reanalysis_summary.md`
 
 If the status changes materially, explain:
 

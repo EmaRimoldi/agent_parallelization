@@ -21,7 +21,7 @@ Rules:
 5. After completing one task, immediately advance to the next using the runner.
 6. If the theory needs to be revised, update the LaTeX source and regenerate the PDF.
 7. Be mathematically rigorous and experimentally rigorous.
-8. Treat the existing validation bundle in `theory_validation_bp_20260412/` as the current source of truth unless you update it with stronger evidence.
+8. Treat the existing validation bundle in `archives/pass_02_theory_validation_bundle_20260412/` as the current source of truth unless you update it with stronger evidence.
 
 Workflow:
 

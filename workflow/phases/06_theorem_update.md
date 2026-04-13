@@ -69,12 +69,12 @@ Write `workflow/results/revised_theorem.md` containing:
 
 ### 5. Update the revised LaTeX if applicable
 
-If the findings support updating `theory_validation_bp_20260412/theory/autoresearch_bp_revised.tex`, note the specific changes needed.
+If the findings support updating `archives/pass_02_theory_validation_bundle_20260412/theory/autoresearch_bp_revised.tex`, note the specific changes needed.
 
 ## Required Inputs
 
 - All results from Phases 02-03
-- The current theorem from `theory_validation_bp_20260412/theory/autoresearch_bp_revised.pdf`
+- The current theorem from `archives/pass_02_theory_validation_bundle_20260412/theory/autoresearch_bp_revised.pdf`
 - BP framework (Theorems 19, 21, 32)
 
 ## Expected Outputs

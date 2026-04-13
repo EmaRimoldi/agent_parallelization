@@ -6,8 +6,8 @@ Repair the experimental protocol so that the quantities required by the theorem 
 
 ## Inputs
 
-- `theory_validation_bp_20260412/analysis/protocol_compliance_audit.md`
-- `theory_validation_bp_20260412/analysis/final_verdict.md`
+- `archives/pass_02_theory_validation_bundle_20260412/analysis/protocol_compliance_audit.md`
+- `archives/pass_02_theory_validation_bundle_20260412/analysis/final_verdict.md`
 - current implementation under `src/`, `scripts/`, and `templates/`
 
 ## Required Work
@@ -55,7 +55,7 @@ Ensure every training run and every repeated evaluation can be linked to:
 
 - code changes implementing the protocol upgrades
 - a new protocol note:
-  `theory_validation_bp_20260412/analysis/protocol_upgrade_spec.md`
+  `archives/pass_02_theory_validation_bundle_20260412/analysis/protocol_upgrade_spec.md`
 
 The note must list:
 
@@ -69,7 +69,7 @@ Run a small smoke test that produces logs with the new fields and verify the fie
 
 Write:
 
-- `theory_validation_bp_20260412/analysis/protocol_upgrade_smoke_check.md`
+- `archives/pass_02_theory_validation_bundle_20260412/analysis/protocol_upgrade_smoke_check.md`
 
 ## Completion Checklist
 

@@ -96,9 +96,9 @@ runs/experiment_calibration_d00_rep*/        # d00 experiment outputs
 runs/experiment_calibration_d10_rep*/        # d10 experiment outputs (partial)
 
 # 6. Theory documents
-theory_validation_bp_20260412/theory/BP.pdf
-theory_validation_bp_20260412/theory/autoresearch_bp.pdf
-theory_validation_bp_20260412/theory/autoresearch_bp_revised.pdf
+archives/pass_02_theory_validation_bundle_20260412/theory/BP.pdf
+archives/pass_02_theory_validation_bundle_20260412/theory/autoresearch_bp.pdf
+archives/pass_02_theory_validation_bundle_20260412/theory/autoresearch_bp_revised.pdf
 ```
 
 ### What Is Currently Running

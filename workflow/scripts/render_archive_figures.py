@@ -261,7 +261,7 @@ def render_flow(smoke_count: int) -> None:
         "12 runs = 4 cells x 3 reps\n"
         "30 min per rep on CIFAR-10 CPU substrate\n\n"
         "Raw runs: runs/experiment_pilot_*\n"
-        "Aggregates: results/ and theory_validation_bp_20260412/artifacts/",
+        "Aggregates: results/ and archives/pass_02_theory_validation_bundle_20260412/artifacts/",
         COLORS["pilot"],
     )
     box(
@@ -273,7 +273,7 @@ def render_flow(smoke_count: int) -> None:
         "Cost variance / Jensen analysis\n"
         "Context-sweep feasibility\n"
         "Protocol smoke and compliance audit\n\n"
-        "Path: theory_validation_bp_20260412/experiments/",
+        "Path: archives/pass_02_theory_validation_bundle_20260412/experiments/",
         COLORS["followup"],
     )
     box(
@@ -304,9 +304,9 @@ def render_flow(smoke_count: int) -> None:
         bundle_box,
         "Reviewer bundle",
         "Top-level README archive\n"
-        "theory_validation_bp_20260412/\n"
+        "archives/pass_02_theory_validation_bundle_20260412/\n"
         "workflow/artifacts/\n"
-        "theory_validation_bp_20260412/theory/\n"
+        "archives/pass_02_theory_validation_bundle_20260412/theory/\n"
         "autoresearch_bp_revised.pdf\n\n"
         "This is the stable handoff package.",
         COLORS["bundle"],
@@ -434,8 +434,8 @@ def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     smoke_count = len(list((ROOT / "runs").glob("experiment_exp_20260411_*")))
     pilot = load_json(ROOT / "results" / "pilot_raw_data.json")
-    noise = load_json(ROOT / "theory_validation_bp_20260412" / "experiments" / "noise_assay" / "noise_summary.json")
-    repmeans = load_json(ROOT / "theory_validation_bp_20260412" / "experiments" / "followup_01" / "replicated_means_summary.json")
+    noise = load_json(ROOT / "archives/pass_02_theory_validation_bundle_20260412" / "experiments" / "noise_assay" / "noise_summary.json")
+    repmeans = load_json(ROOT / "archives/pass_02_theory_validation_bundle_20260412" / "experiments" / "followup_01" / "replicated_means_summary.json")
     calibration = load_json(ROOT / "workflow" / "artifacts" / "calibration_analysis_current.json")
     calibration_runs = load_json(ROOT / "workflow" / "artifacts" / "calibration_runs.json")
     render_flow(smoke_count)

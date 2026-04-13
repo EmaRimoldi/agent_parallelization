@@ -66,7 +66,7 @@ Create a companion `workflow/reports/final_report_data.json` with all machine-re
 
 ### 7. Update the theory validation bundle
 
-Copy key outputs to `theory_validation_bp_20260412/`:
+Copy key outputs to `archives/pass_02_theory_validation_bundle_20260412/`:
 - Updated `analysis/final_verdict.md`
 - New `analysis/deterministic_results_summary.md`
 - Updated decomposition JSONs

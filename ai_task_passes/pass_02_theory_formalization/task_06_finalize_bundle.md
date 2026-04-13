@@ -12,9 +12,9 @@ Produce a clean handoff package for a future reviewer / model / collaborator.
    - keep raw evidence
    - remove accidental caches or noise where appropriate
 4. If the final theorem changed materially, regenerate:
-   - `theory_validation_bp_20260412/theory/autoresearch_bp_revised.tex`
-   - `theory_validation_bp_20260412/theory/autoresearch_bp_revised.pdf`
-   - keep `theory_validation_bp_20260412/theory/` as the canonical theory location
+   - `archives/pass_02_theory_validation_bundle_20260412/theory/autoresearch_bp_revised.tex`
+   - `archives/pass_02_theory_validation_bundle_20260412/theory/autoresearch_bp_revised.pdf`
+   - keep `archives/pass_02_theory_validation_bundle_20260412/theory/` as the canonical theory location
 5. Write a final handoff note explaining:
    - what is done
    - what remains open
@@ -22,9 +22,9 @@ Produce a clean handoff package for a future reviewer / model / collaborator.
 
 ## Deliverables
 
-- updated `theory_validation_bp_20260412/README.md`
+- updated `archives/pass_02_theory_validation_bundle_20260412/README.md`
 - updated revised theory PDF if needed
-- `theory_validation_bp_20260412/analysis/handoff_note.md`
+- `archives/pass_02_theory_validation_bundle_20260412/analysis/handoff_note.md`
 
 Optional but recommended:
 

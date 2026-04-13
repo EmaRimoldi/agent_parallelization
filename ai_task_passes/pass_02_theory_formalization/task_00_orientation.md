@@ -8,14 +8,14 @@ Build a shared understanding of the current state before changing theory, code, 
 
 Read these files in order:
 
-1. `theory_validation_bp_20260412/README.md`
-2. `theory_validation_bp_20260412/analysis/final_verdict.md`
-3. `theory_validation_bp_20260412/analysis/formal_theory_audit.md`
-4. `theory_validation_bp_20260412/analysis/protocol_compliance_audit.md`
-5. `theory_validation_bp_20260412/analysis/noise_assay_interpretation.json`
-6. `theory_validation_bp_20260412/theory/autoresearch_bp_revised.pdf`
-7. `theory_validation_bp_20260412/theory/autoresearch_bp.pdf`
-8. `theory_validation_bp_20260412/theory/BP.pdf`
+1. `archives/pass_02_theory_validation_bundle_20260412/README.md`
+2. `archives/pass_02_theory_validation_bundle_20260412/analysis/final_verdict.md`
+3. `archives/pass_02_theory_validation_bundle_20260412/analysis/formal_theory_audit.md`
+4. `archives/pass_02_theory_validation_bundle_20260412/analysis/protocol_compliance_audit.md`
+5. `archives/pass_02_theory_validation_bundle_20260412/analysis/noise_assay_interpretation.json`
+6. `archives/pass_02_theory_validation_bundle_20260412/theory/autoresearch_bp_revised.pdf`
+7. `archives/pass_02_theory_validation_bundle_20260412/theory/autoresearch_bp.pdf`
+8. `archives/pass_02_theory_validation_bundle_20260412/theory/BP.pdf`
 
 ## Reviewer Findings You Must Treat As Binding Until Overturned
 
@@ -39,7 +39,7 @@ The last review established the following working assumptions:
 
 Create a short note:
 
-- `theory_validation_bp_20260412/analysis/task_00_orientation_note.md`
+- `archives/pass_02_theory_validation_bundle_20260412/analysis/task_00_orientation_note.md`
 
 The note must contain:
 

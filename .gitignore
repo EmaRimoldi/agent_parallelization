@@ -15,10 +15,10 @@ autoresearch/data/
 workflow/logs/
 ai_task_passes/pass_02_theory_formalization/.runner_state/
 ai_task_passes/pass_01_bp_implementation/logs/task_runner/
-theory_validation_bp_20260412/theory/*.aux
-theory_validation_bp_20260412/theory/*.log
-theory_validation_bp_20260412/theory/*.out
-theory_validation_bp_20260412/artifacts/protocol_smoke/workspace/
+archives/pass_02_theory_validation_bundle_20260412/theory/*.aux
+archives/pass_02_theory_validation_bundle_20260412/theory/*.log
+archives/pass_02_theory_validation_bundle_20260412/theory/*.out
+archives/pass_02_theory_validation_bundle_20260412/artifacts/protocol_smoke/workspace/
 
 # Jupyter
 .ipynb_checkpoints/

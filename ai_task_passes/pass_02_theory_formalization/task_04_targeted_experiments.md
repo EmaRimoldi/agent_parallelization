@@ -6,8 +6,8 @@ Run the smallest set of experiments that most strongly determine whether the the
 
 ## Inputs
 
-- `theory_validation_bp_20260412/analysis/final_verdict.md`
-- `theory_validation_bp_20260412/analysis/validation_strategy.md`
+- `archives/pass_02_theory_validation_bundle_20260412/analysis/final_verdict.md`
+- `archives/pass_02_theory_validation_bundle_20260412/analysis/validation_strategy.md`
 - reviewer conclusion already summarized in the validation bundle
 
 ## Experiment Priority
@@ -69,7 +69,7 @@ Only if Tasks 02 and 03 succeeded well enough:
 
 Create a subdirectory:
 
-- `theory_validation_bp_20260412/experiments/followup_01/`
+- `archives/pass_02_theory_validation_bundle_20260412/experiments/followup_01/`
 
 Store:
 
@@ -80,9 +80,9 @@ Store:
 
 At minimum write:
 
-- `theory_validation_bp_20260412/analysis/experiment_01_replicated_means.md`
-- `theory_validation_bp_20260412/analysis/experiment_02_cost_variance.md`
-- `theory_validation_bp_20260412/analysis/experiment_03_context_sweep.md`
+- `archives/pass_02_theory_validation_bundle_20260412/analysis/experiment_01_replicated_means.md`
+- `archives/pass_02_theory_validation_bundle_20260412/analysis/experiment_02_cost_variance.md`
+- `archives/pass_02_theory_validation_bundle_20260412/analysis/experiment_03_context_sweep.md`
 
 Each note must contain:
 
@@ -97,4 +97,4 @@ Each note must contain:
 - [ ] Replicated means experiment run and summarized
 - [ ] Cost variance analysis run and summarized
 - [ ] Context-pressure sweep run and summarized or explicitly declared infeasible with reason
-- [ ] All outputs saved under `theory_validation_bp_20260412/`
+- [ ] All outputs saved under `archives/pass_02_theory_validation_bundle_20260412/`

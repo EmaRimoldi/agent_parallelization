@@ -6,8 +6,8 @@ Replace the currently broken / placeholder decomposition estimators with definit
 
 ## Inputs
 
-- `theory_validation_bp_20260412/analysis/formal_theory_audit.md`
-- `theory_validation_bp_20260412/analysis/protocol_compliance_audit.md`
+- `archives/pass_02_theory_validation_bundle_20260412/analysis/formal_theory_audit.md`
+- `archives/pass_02_theory_validation_bundle_20260412/analysis/protocol_compliance_audit.md`
 - current `scripts/compute_decomposition.py`
 - current `scripts/label_modes.py`
 
@@ -64,7 +64,7 @@ Either:
 - updated `scripts/label_modes.py`
 - updated `scripts/compute_decomposition.py`
 - estimator note:
-  `theory_validation_bp_20260412/analysis/estimator_design.md`
+  `archives/pass_02_theory_validation_bundle_20260412/analysis/estimator_design.md`
 
 The note must include a table with columns:
 
@@ -84,7 +84,7 @@ Run the estimators on at least one existing pilot repetition and confirm:
 
 Write:
 
-- `theory_validation_bp_20260412/analysis/estimator_validation_note.md`
+- `archives/pass_02_theory_validation_bundle_20260412/analysis/estimator_validation_note.md`
 
 ## Completion Checklist
 
