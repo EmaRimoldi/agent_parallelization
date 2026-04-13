@@ -16,11 +16,20 @@ Can we empirically measure how parallelism and memory affect the performance of 
 Delta = log(kappa_0 / kappa) + phi + G - epsilon
 ```
 
-where:
-- **log(kappa_0 / kappa)**: cost efficiency — does this configuration use fewer tokens/time per attempt?
-- **phi**: prior alignment — does the agent start with better initial guesses?
-- **G**: information gain — does the agent learn more from each observation (e.g., via memory)?
-- **epsilon**: coordination mismatch — does parallelism introduce routing inefficiency?
+Each term has a specific empirical estimator used in Pass 01:
+
+- **log(kappa_0 / kappa)** — cost efficiency. kappa is the mean cost per LLM turn, measured in two units:
+  - *Token axis*: kappa_token = mean tokens per turn (input + output). Tokens are read from the Claude API `usage` response; if unavailable, estimated as total_characters / 4, calibrated against turns that do have API counts (median ratio correction).
+  - *Wall-clock axis*: kappa_wall = mean wall-clock seconds per turn.
+  - The ratio kappa_0/kappa compares the baseline cell (d00) to the design cell. log > 0 means the design cell is cheaper per turn.
+
+- **phi** — prior alignment. Estimated via mode-conditional attempts-to-first-success: for each edit category (optimizer, lr_schedule, architecture, batch_data), count how many turns until the first accepted change. phi = weighted sum of log(baseline_steps / design_steps) across categories, weighted by the global prior (relative frequency of each category across all cells). phi > 0 means the design cell finds improvements faster.
+
+- **G** — information gain. Estimated as KL(pi_D || pi_global), where pi_D is the distribution of accepted edit categories in the design cell and pi_global is the pooled distribution across all cells. G > 0 means the design cell specializes differently from the population average — it has learned to focus on certain categories. Uses Laplace smoothing (1e-6) to avoid division by zero.
+
+- **epsilon** — coordination mismatch. Estimated as KL(pi_D || q_D), where pi_D is the distribution of *accepted* edit categories and q_D is the distribution of *proposed* edit categories (including rejected ones). epsilon > 0 means the agent wastes effort proposing changes in categories that don't get accepted — it routes exploration poorly.
+
+**Why phi, G, epsilon were near-zero in the pilot**: The mode labeling system classifies each agent edit into categories, but in the pilot most edits fell into the same category ("optimizer"), yielding near-uniform distributions. With so little category diversity, the KL divergences collapse to zero and the attempts-to-first-success ratios are uninformative. This is a measurement resolution problem, not a theoretical one.
 
 This decomposition was developed for theoretical analysis. The question is whether it produces measurable, non-trivial terms when applied to real LLM agents running real ML tasks.
 
@@ -61,7 +70,7 @@ The agent follows a one-change-per-turn strategy, guided by its memory of previo
 
 **val_bpb metric**: Despite the name "bits per byte", this is simply the **cross-entropy loss** on the CIFAR-10 test set (10,000 images). It is printed as `val_bpb` in the training output but is identical to `val_loss`. Lower is better. Typical range: 0.73-0.90 for well-tuned models, ~1.9 for untrained/short runs.
 
-**Why initial val_bpb differs across runs**: Each experiment starts from a different git commit state. The agent modifies `train.py` during the experiment, and each repetition starts fresh from the repository baseline — but different experiment batches may have been launched from slightly different baseline commits (with different default hyperparameters). Additionally, with only 120 seconds per training attempt and different random seeds for data augmentation order, the first evaluation point varies. This is an uncontrolled source of variance in Pass 01.
+**Why initial val_bpb differs across runs**: The "initial val_bpb" in the table is the result of the **first training attempt** — but the LLM agent modifies `train.py` *before* launching that first attempt. The agent is non-deterministic (Claude's sampling temperature), so two runs of the same cell will make different first edits to the hyperparameters, producing different first val_bpb values. For example, d01/rep1's agent happened to choose poor initial hyperparameters (initial val_bpb = 0.900, worst in the table), while d10/rep2's agent got lucky (0.761, close to the final best). The underlying `train.py` is deterministic (SEED=42, deterministic PyTorch), so given the same code the same val_bpb is always produced — all variance comes from the LLM's non-deterministic code edits. This is an inherent feature of the experimental design (the agent's choices ARE the experiment), not a bug.
 
 **Tokens consumed**: This counts **Claude API tokens** (input + output) used by the LLM agent during its autonomous loop — how much "thinking" the agent did. It is NOT related to training data tokens. Counted from the API usage response when available, or estimated as characters/4 as fallback. Parallel cells consume roughly 2x more tokens because two agents run simultaneously.
 
