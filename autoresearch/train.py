@@ -69,11 +69,10 @@ LR_DECAY_EPOCHS = [60, 80]
 BATCH_SIZE = 128
 NUM_WORKERS = 0
 
-# --- Deterministic training budget ------------------------------------------
-# Fixed step count replaces the original time-based loop for reproducibility.
-# steps_per_epoch = 50000 // 128 = 390 (CIFAR-10, batch_size=128, drop_last=True)
-# ~0.1s per step on CPU → 585 steps ≈ 60s (matches train_time_budget_seconds)
-MAX_STEPS = 585
+# --- Training budget --------------------------------------------------------
+# Use time-based stopping via AUTOSEARCH_TIME_BUDGET env var (seconds).
+# Falls back to TIME_BUDGET from prepare.py (120s) if env var not set.
+TRAIN_TIME_BUDGET = int(os.environ.get("AUTOSEARCH_TIME_BUDGET", str(TIME_BUDGET)))
 
 
 class ConvBlock(nn.Module):
@@ -208,7 +207,7 @@ def main():
                 print(f"total_seconds:     {time.time() - t_start:.1f}")
                 return
 
-            if step >= MAX_STEPS:
+            if total_training_time >= TRAIN_TIME_BUDGET:
                 done = True
                 break
 

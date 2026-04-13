@@ -1,2 +1,0 @@
-{"step": 1, "mode": "architecture", "diff_lines_changed": 4, "hypothesis": "increase DEPTH from 3 to 4", "val_bpb_after": 0.73946, "accepted": true}
-{"step": 2, "mode": "architecture", "diff_lines_changed": 4, "hypothesis": "increase BASE_CHANNELS from 32 to 64", "val_bpb_after": 0.988402, "accepted": false}

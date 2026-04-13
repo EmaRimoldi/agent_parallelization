@@ -1,1 +1,0 @@
-{"step": 1, "mode": "architecture", "diff_lines_changed": 4, "hypothesis": "increase DEPTH to 4", "val_bpb_after": 0.815907, "accepted": true}

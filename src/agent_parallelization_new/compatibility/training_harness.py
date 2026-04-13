@@ -309,6 +309,7 @@ def generate_run_on_worker_sh(
         script = f"""#!/bin/bash
 # CPU mode - run training directly
 export PATH="{path_additions}:$PATH"
+export AUTOSEARCH_TIME_BUDGET={train_budget_seconds}
 cd "{workspace}"
 rm -f run.result run.trigger
 touch run.trigger

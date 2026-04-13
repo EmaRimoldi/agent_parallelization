@@ -1,9 +1,0 @@
-Experiment: exp_20260411_195625
-Mode:       single_memory
-Best val_bpb: 0.73946
-Beats known best (1.1020746984708296): True
-Best agent: agent_0
-Total successful runs: 3
-
-Per-agent summary:
-  agent_0: best=0.73946  first=0.813727  improvement=-0.07426699999999997  runs=3  failed=False

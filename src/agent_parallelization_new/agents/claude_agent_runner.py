@@ -263,7 +263,7 @@ class ClaudeAgentRunner(AgentRunner):
                         shared_memory_context_entries = self._count_shared_memory_entries()
                         if memory:
                             turn_msg = f"{memory}\n\n---\n\n{turn_msg}"
-                    elif self.config.use_external_memory:
+                    if self.config.use_external_memory:
                         memory = self._build_memory_context()
                         memory_context_visible = bool(memory)
                         memory_context_entries = self._count_private_memory_entries()
@@ -483,6 +483,18 @@ class ClaudeAgentRunner(AgentRunner):
         active_run_context: Optional[dict[str, object]] = None
 
         while not stop_event.is_set():
+            # Repair shared memory symlink if agent destroyed it (e.g. git checkout)
+            if self.config.use_shared_memory:
+                shared_ws = ws / "shared_results_log.jsonl"
+                if not shared_ws.exists():
+                    # Find the experiment-level shared log
+                    shared_src = self.agent_dir.parent.parent / "shared_results_log.jsonl"
+                    if shared_src.exists():
+                        try:
+                            shared_ws.symlink_to(shared_src)
+                        except OSError:
+                            pass
+
             # train.py modified → log diff vs baseline so we see what changed
             try:
                 mtime = train_py.stat().st_mtime if train_py.exists() else None
@@ -494,37 +506,16 @@ class ClaudeAgentRunner(AgentRunner):
             except OSError:
                 pass
 
-            if self.config.use_shared_memory and trace_path.exists():
-                try:
-                    for raw_line in trace_path.read_text().splitlines():
-                        if not raw_line.strip():
-                            continue
-                        entry = json.loads(raw_line)
-                        step = entry.get("step_index")
-                        if not isinstance(step, int) or step in shared_logged_steps:
-                            continue
-                        accepted = entry.get("accepted")
-                        val_bpb = entry.get("val_bpb_after")
-                        if accepted is None and val_bpb is None:
-                            continue
-                        self._append_shared_log(
-                            step=step,
-                            hypothesis=str(entry.get("hypothesis", "")),
-                            val_bpb=val_bpb,
-                            accepted=bool(accepted),
-                        )
-                        shared_logged_steps.add(step)
-                except (OSError, json.JSONDecodeError, TypeError, ValueError):
-                    pass
-
-            # results.tsv new row → agent logged a result
+            # results.tsv new row → agent logged a result (log only, shared memory
+            # is populated directly from training run completion above)
             try:
                 if results_tsv.exists():
                     lines = [l for l in results_tsv.read_text().splitlines() if l.strip()]
                     if len(lines) > results_tsv_lines:
                         for row in lines[results_tsv_lines:]:
-                            if not row.startswith("commit"):  # skip header
-                                _log(log_fh, f"[{agent_id}] results.tsv: {row}")
+                            if row.startswith("commit"):
+                                continue
+                            _log(log_fh, f"[{agent_id}] results.tsv: {row}")
                         results_tsv_lines = len(lines)
             except OSError:
                 pass
@@ -604,6 +595,21 @@ class ClaudeAgentRunner(AgentRunner):
                     training_seconds=training_seconds,
                     parsed_val_bpb=parsed_val_bpb,
                 )
+
+                # Populate shared memory from completed training run
+                # (more reliable than waiting for agent to write results.tsv)
+                if self.config.use_shared_memory and parsed_val_bpb is not None:
+                    desc = (
+                        training_run_record.get("git_message")
+                        or training_run_record.get("hypothesis")
+                        or "run"
+                    )
+                    self._append_shared_log(
+                        step=self._training_run_count,
+                        hypothesis=desc[:60],
+                        val_bpb=parsed_val_bpb,
+                        accepted=parsed_val_bpb < min(observed_val_bpbs) if observed_val_bpbs else True,
+                    )
 
                 if val_bpb:
                     try:
@@ -814,43 +820,75 @@ class ClaudeAgentRunner(AgentRunner):
             proc.wait()
 
     def _build_memory_context(self) -> str:
-        """Build a compact experiment log from the agent's private trace."""
-        trace_path = self.agent_dir / "reasoning" / "trace.jsonl"
-        if not trace_path.exists():
-            return ""
-
+        """Build a compact experiment log from training_runs.jsonl (primary) or results.tsv."""
         lines = [
             "# Experiment Log",
             "| # | change | bpb | Δ | best |",
             "|---|--------|-----|---|------|",
         ]
         best_bpb = float("inf")
+        prev_bpb: Optional[float] = None
+        step = 0
 
-        for raw_line in trace_path.read_text().splitlines():
-            if not raw_line.strip():
-                continue
-            try:
-                entry = json.loads(raw_line)
-                step = entry.get("step_index", entry.get("step", "?"))
-                hypothesis = str(entry.get("hypothesis", "?"))[:40]
-                bpb = entry.get("val_bpb_after")
-                if bpb is None:
+        # Primary source: training_runs.jsonl (written by monitoring loop, always reliable)
+        if self.training_runs_log_path.exists():
+            for raw_line in self.training_runs_log_path.read_text().splitlines():
+                if not raw_line.strip():
                     continue
-                bpb_val = float(bpb)
-                prev = entry.get("val_bpb_before")
-                delta = (
-                    f"{bpb_val - float(prev):+.4f}"
-                    if prev not in (None, "")
-                    else "—"
-                )
-                is_best = "✓" if bpb_val < best_bpb else ""
-                if bpb_val < best_bpb:
-                    best_bpb = bpb_val
-                lines.append(
-                    f"| {step} | {hypothesis} | {bpb_val:.4f} | {delta} | {is_best} |"
-                )
-            except (json.JSONDecodeError, TypeError, ValueError):
-                continue
+                try:
+                    entry = json.loads(raw_line)
+                    bpb_val = entry.get("val_bpb")
+                    if bpb_val is None:
+                        continue
+                    desc = (
+                        entry.get("git_message")
+                        or entry.get("hypothesis")
+                        or entry.get("strategy_category")
+                        or "?"
+                    )[:40]
+                    step += 1
+                    delta = (
+                        f"{bpb_val - prev_bpb:+.4f}" if prev_bpb is not None else "—"
+                    )
+                    is_best = "✓" if bpb_val < best_bpb else ""
+                    if bpb_val < best_bpb:
+                        best_bpb = bpb_val
+                    lines.append(
+                        f"| {step} | {desc} | {bpb_val:.4f} | {delta} | {is_best} |"
+                    )
+                    prev_bpb = bpb_val
+                except (json.JSONDecodeError, TypeError, ValueError):
+                    continue
+
+        # Fallback: results.tsv in workspace (agent-written, sometimes incomplete)
+        if step == 0:
+            results_tsv = self.workspace / "results" / "results.tsv"
+            if results_tsv.exists():
+                for raw_line in results_tsv.read_text().splitlines():
+                    if not raw_line.strip() or raw_line.startswith("commit"):
+                        continue
+                    try:
+                        parts = raw_line.split("\t")
+                        if len(parts) < 5:
+                            continue
+                        bpb_str = parts[1]
+                        if bpb_str in ("0.000000", ""):
+                            continue
+                        bpb_val = float(bpb_str)
+                        desc = parts[4][:40]
+                        step += 1
+                        delta = (
+                            f"{bpb_val - prev_bpb:+.4f}" if prev_bpb is not None else "—"
+                        )
+                        is_best = "✓" if bpb_val < best_bpb else ""
+                        if bpb_val < best_bpb:
+                            best_bpb = bpb_val
+                        lines.append(
+                            f"| {step} | {desc} | {bpb_val:.4f} | {delta} | {is_best} |"
+                        )
+                        prev_bpb = bpb_val
+                    except (ValueError, IndexError):
+                        continue
 
         return "\n".join(lines) if len(lines) > 3 else ""
 
@@ -930,6 +968,16 @@ class ClaudeAgentRunner(AgentRunner):
             return 0
 
     def _count_private_memory_entries(self) -> int:
+        # Primary: training_runs.jsonl (monitoring loop, always reliable)
+        if self.training_runs_log_path.exists():
+            count = self._count_nonempty_lines(self.training_runs_log_path)
+            if count > 0:
+                return count
+        # Fallback: results.tsv in workspace (agent-written, sometimes incomplete)
+        tsv = self.workspace / "results" / "results.tsv"
+        if tsv.exists():
+            count = self._count_nonempty_lines(tsv)
+            return max(0, count - 1)  # subtract header
         return self._count_nonempty_lines(self.agent_dir / "reasoning" / "trace.jsonl")
 
     def _count_shared_memory_entries(self) -> int:

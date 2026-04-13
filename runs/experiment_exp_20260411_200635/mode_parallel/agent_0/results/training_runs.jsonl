@@ -1,2 +1,0 @@
-{"run_index": 1, "turn": 0, "started_at": 1775952414.042449, "finished_at": 1775952550.455041, "wall_seconds": 136.4125919342041, "training_seconds": 120.0, "val_bpb": 0.82375, "status": "success"}
-{"run_index": 2, "turn": 1, "started_at": 1775952607.096748, "finished_at": 1775952743.458406, "wall_seconds": 136.3616578578949, "training_seconds": 120.1, "val_bpb": 1.285071, "status": "success"}

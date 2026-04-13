@@ -8,21 +8,27 @@ build/
 venv/
 *.egg
 
-# Runs and experiment outputs
+# Runs and experiment outputs (raw data, too large for git)
 runs/
-**/results/*
-!results/
-!results/imported_swarms/
-!results/imported_swarms/**
+passes/*/runs/
+passes/*/logs/
+
+# Results (generated analysis, figures — regenerable from runs)
+passes/*/results/
+
+# Exceptions: track imported swarms results (small, curated)
+!passes/pass_00__swarms__archived/results/
+!passes/pass_00__swarms__archived/results/**
+
+# External repos
 agents-swarms/
 autoresearch/data/
+
+# Legacy paths (compatibility symlinks)
+configs
 workflow/logs/
-ai_task_passes/pass_02_theory_formalization/.runner_state/
-ai_task_passes/pass_01_bp_implementation/logs/task_runner/
-archives/pass_02_theory_validation_bundle_20260412/theory/*.aux
-archives/pass_02_theory_validation_bundle_20260412/theory/*.log
-archives/pass_02_theory_validation_bundle_20260412/theory/*.out
-archives/pass_02_theory_validation_bundle_20260412/artifacts/protocol_smoke/workspace/
+workflow/artifacts/
+workflow/scripts
 
 # Jupyter
 .ipynb_checkpoints/
@@ -33,3 +39,8 @@ archives/pass_02_theory_validation_bundle_20260412/artifacts/protocol_smoke/work
 
 # Claude Code project settings
 .claude/
+
+# LaTeX build artifacts
+*.aux
+*.log
+*.out
