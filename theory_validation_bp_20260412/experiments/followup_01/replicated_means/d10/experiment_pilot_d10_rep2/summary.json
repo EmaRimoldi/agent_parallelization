@@ -1,0 +1,27 @@
+{
+  "cell": "d10",
+  "replicate": "experiment_pilot_d10_rep2",
+  "candidate_source": "training_run",
+  "candidate_commit": "eb729601180a3c4b87c005025424f0c385471afa",
+  "candidate_agent_id": "agent_0",
+  "repeat_count": 2,
+  "values": [
+    0.861979,
+    0.772117
+  ],
+  "mean_val_bpb": 0.817048,
+  "std_val_bpb": 0.044931,
+  "selected_candidate_pilot_val_bpb": 0.760959,
+  "logs": [
+    {
+      "run_index": 1,
+      "val_bpb": 0.861979,
+      "log_path": "/Users/emanuelerimoldi/Documents/GitHub/agent_parallelization/theory_validation_bp_20260412/experiments/followup_01/replicated_means/d10/experiment_pilot_d10_rep2/run_01.log"
+    },
+    {
+      "run_index": 2,
+      "val_bpb": 0.772117,
+      "log_path": "/Users/emanuelerimoldi/Documents/GitHub/agent_parallelization/theory_validation_bp_20260412/experiments/followup_01/replicated_means/d10/experiment_pilot_d10_rep2/run_02.log"
+    }
+  ]
+}

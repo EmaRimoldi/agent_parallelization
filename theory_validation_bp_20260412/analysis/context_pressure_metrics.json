@@ -1,0 +1,42 @@
+{
+  "d00": {
+    "n_turns": 55,
+    "context_fill_min": 0.0110025,
+    "context_fill_max": 0.22831875,
+    "context_fill_mean": 0.10239436363636363,
+    "mean_tokens_per_turn": 2234.9454545454546,
+    "linear_slope_tokens_per_unit_context": 3020.2319966247305,
+    "pearson_corr_context_tokens": 0.3282022528798207,
+    "quartile_coverage_comment": "No turns exceed 25% context fill in aggregated quartile table expectation"
+  },
+  "d10": {
+    "n_turns": 51,
+    "context_fill_min": 0.01214875,
+    "context_fill_max": 0.217345,
+    "context_fill_mean": 0.10092737745098039,
+    "mean_tokens_per_turn": 2460.901960784314,
+    "linear_slope_tokens_per_unit_context": 4596.645002155838,
+    "pearson_corr_context_tokens": 0.2755956292567725,
+    "quartile_coverage_comment": "No turns exceed 25% context fill in aggregated quartile table expectation"
+  },
+  "d01": {
+    "n_turns": 106,
+    "context_fill_min": 0.01213625,
+    "context_fill_max": 0.24264875,
+    "context_fill_mean": 0.10529439858490566,
+    "mean_tokens_per_turn": 2407.3584905660377,
+    "linear_slope_tokens_per_unit_context": 2078.6832674975326,
+    "pearson_corr_context_tokens": 0.17005426373817323,
+    "quartile_coverage_comment": "No turns exceed 25% context fill in aggregated quartile table expectation"
+  },
+  "d11": {
+    "n_turns": 93,
+    "context_fill_min": 0.0124825,
+    "context_fill_max": 0.211505,
+    "context_fill_mean": 0.09300934139784946,
+    "mean_tokens_per_turn": 2439.6129032258063,
+    "linear_slope_tokens_per_unit_context": 3976.3154638580663,
+    "pearson_corr_context_tokens": 0.23308223295944402,
+    "quartile_coverage_comment": "No turns exceed 25% context fill in aggregated quartile table expectation"
+  }
+}

@@ -92,6 +92,14 @@ For each Claude invocation, do **at most one** new training run and then stop:
 11. If `val_bpb` is equal or worse: `git reset --hard HEAD~1` and try something else
 12. Stop after this single iteration and return a brief summary so the controller can issue the next turn.
 
+If the controller tells you a candidate must be **re-evaluated**:
+
+1. Restore the exact candidate commit into `train.py`
+2. Do **not** edit `train.py` before that run
+3. Run exactly one repeat evaluation of the same candidate
+4. Treat that run as a repeat of the same candidate, not as a new hypothesis
+5. Only after the reevaluation is complete should you resume exploration
+
 If there is not enough time left for another training run, do not start one. Briefly summarize the current best result and stop.
 
 **When the controller explicitly tells you the session is ending:**
@@ -116,6 +124,15 @@ bash stop_gpu_worker.sh $WORKER_JOB_ID
 - `python update_snapshot.py <step> <val_bpb_after> <accepted> "<reason>" "<next_step>"`
   — call AFTER each training result; updates snapshot metadata and reasoning trace
   — use `null` for val_bpb_after on crash; `true`/`false` for accepted
+
+Write hypotheses so they are easy to classify later. Good examples:
+
+- `lower learning rate to 3e-4`
+- `increase dropout to 0.2`
+- `wider conv stem`
+- `stronger data augmentation`
+
+Avoid vague descriptions like `try another tweak`.
 
 These are mandatory. The merge orchestrator cannot reconstruct trajectories without them.
 

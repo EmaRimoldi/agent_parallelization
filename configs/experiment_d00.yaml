@@ -6,8 +6,8 @@ experiment:
 agents:
   n: 1
   model: claude-haiku-4-5-20251001
-  time_budget_minutes: 30
-  train_time_budget_seconds: 120
+  time_budget_minutes: 45
+  train_time_budget_seconds: 60
   temperature: null
   cuda_devices: null
   use_external_memory: false

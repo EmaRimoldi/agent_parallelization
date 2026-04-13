@@ -1,178 +1,193 @@
-# Agent Parallelization
+# BP 2×2 Instrumentation on AutoResearch
 
-Parallel agent experiment framework using Claude Code sub-agents to search hyperparameters faster through independent exploration.
+This repository is the working implementation and evidence bundle for a BP-style decomposition study on autonomous coding agents.
 
-## How it works
+The research question is whether AutoResearch-style agent architectures can be analyzed through the Beneventano-Poggio decomposition
 
-![Workflow overview](docs/workflow_overview.svg)
-
-N independent Claude Code sub-agents run in parallel, each with its own isolated git worktree, GPU allocation, time budget, and output directory. Agents never communicate during the run — they explore the hyperparameter space independently and their best results are merged at the end.
-
-### Agent lifecycle
-
-```
-Orchestrator
-│
-├─ spawns N processes simultaneously
-│
-├─ Agent 0 ──────────────────────────────────────────────────────────►
-│    │  bash start_gpu_worker.sh   →  SLURM allocates GPU
-│    │  ┌─ gpu_allocated_at written ── budget clock starts here ──┐
-│    │  │                                                          │ T minutes
-│    │  │  loop:                                                   │
-│    │  │    edit train.py → bash run_on_worker.sh → val_bpb       │
-│    │  │    keep if improved, git reset if not                    │
-│    │  └──────────────────────────────────────────────────────────┘
-│    │  bash stop_gpu_worker.sh   →  GPU released
-│
-├─ Agent 1 ──────────────────────────────────────────────────────────►
-│    │  (same flow, different GPU, independent git branch)
-│
-└─ Collector → Merger → final merged train.py
+```math
+\Delta = \log(\kappa_0 / \kappa) + \phi + G - \epsilon
 ```
 
-**Budget accounting:** the T-minute clock starts from the moment SLURM allocates the GPU, not from when the agent process starts. This ensures all agents get a fair T minutes of actual research time regardless of queue wait.
+under a controlled CPU substrate, deterministic evaluation, structured instrumentation, and post-hoc decomposition analysis.
 
-### Training loop (per agent)
+## Status
 
-Each agent runs this loop autonomously until interrupted:
+As of **April 13, 2026**, the repository contains:
 
-1. Form a hypothesis — one scalar hyperparameter change
-2. Edit `train.py`, `git commit`
-3. `python save_snapshot.py` — log hypothesis before training
-4. `bash run_on_worker.sh` — blocks until training completes (~5 min), prints `val_bpb`
-5. Keep commit if `val_bpb` improved, `git reset --hard HEAD~1` if not
-6. `python update_snapshot.py` — record outcome and next step
-7. Repeat
+- a complete **deterministic Phase 02 calibration** on `d00` vs `d10`;
+- a full theory-validation bundle in [`theory_validation_bp_20260412/`](theory_validation_bp_20260412/);
+- corrected instrumentation, reevaluation logging, and mode-labeling infrastructure;
+- an **exploratory** `d01` / `d11` full 2×2 run launched after calibration.
 
-The 5-minute training budget is wall-clock time **excluding compilation** — training runs are directly comparable across different hyperparameter configurations.
+Important: the calibration evidence currently supports a **split interpretation**:
 
-## Open questions / known issues
+- the descriptive **best-of-rep** view suggests a medium difference, but in the wrong direction for `d10`;
+- the stricter **all-runs + accepted-mode** gate remains effectively negative and points to `structured_search` rather than a clean `proceed`.
 
-### Q: How many runs fit in a 10-minute budget?
+So the `d01` / `d11` run should be read as a **manual exploratory override**, not as a gate-qualified next phase.
 
-**Answer: ~1 complete run.**
+## Experimental Design
 
-Each training run occupies ~390s of wall-clock time even though the training budget is 300s:
+The 2×2 design is:
 
-| Phase | Time |
-|---|---|
-| Python import + model build | ~5s |
-| `torch.compile` (step 0, `dt ≈ 31s`) | ~31s |
-| Steps 1–10 (excluded from budget counter) | ~19s |
-| **Actual training (steps 11→end)** | **~301s** |
-| Final `evaluate_bpb()` | ~15s |
-| NFS polling + worker loop overhead | ~5s |
-| Worker `sleep 2` + `run.result` roundtrip | ~3s |
-| **Total wall-clock per run** | **~379s** |
+| Cell | Agents | Memory | Intended BP reading |
+| --- | --- | --- | --- |
+| `d00` | 1 | none | baseline |
+| `d10` | 1 | external memory | memory / routing effect |
+| `d01` | 2 parallel | none | exploration / `G` effect |
+| `d11` | 2 parallel | shared memory | interaction of parallelism and routing |
 
-With 600s agent budget: 600 / 379 ≈ **1.6 runs → effectively 1**.
+The current substrate is a **CPU-only CIFAR-10 optimization task**:
 
-To fit 2 runs in 10 minutes, either reduce `train_time_budget_seconds` to ~180s (two runs × ~270s ≈ 540s), or increase the agent budget to 15 minutes.
+- agents may modify [`autoresearch/train.py`](autoresearch/train.py);
+- [`autoresearch/prepare.py`](autoresearch/prepare.py) is fixed;
+- the optimization target is `val_bpb` / validation loss proxy;
+- evaluation was made deterministic before calibration;
+- agent turns, training runs, reevaluations, and mode labels are logged.
 
-### Q: Does `torch.compile` happen on every run?
+## Workflow Phases
 
-**No** — on the second and subsequent runs within the same experiment, the kernel cache in `/tmp/torchinductor_<user>/` (node-local) is reused. Recompilation only happens on the first run per experiment (or when the SLURM worker lands on a different node).
+The workflow DAG lives under [`workflow/phases/`](workflow/phases/).
 
-Note: the training budget counter (`if step > 10: total_training_time += dt`) already excludes steps 0–10, so compile time does **not** eat into the 300s training budget. It still consumes ~50s of wall-clock time per run.
+| Phase | Purpose | Main output |
+| --- | --- | --- |
+| `00_overview` | orient the workflow and prerequisites | workflow setup |
+| `01_*` | make evaluation deterministic | deterministic substrate |
+| `02_power_calibration` | calibrate `d00` vs `d10` | effect size, diversity, cost variance |
+| `02a_analyze_calibration` | aggregate calibration evidence | analysis JSON + summary |
+| `02b_decision_gate` | choose proceed / extend / escalate / structured search | workflow decision |
+| `03_*` | full 2×2 experiment and decomposition | `d00/d10/d01/d11` comparison |
+| `04_escalation_cifar100` | harder substrate fallback | CIFAR-100 branch |
+| `05_structured_search` | structured-search fallback | exact mode mapping |
+| `06_theorem_update` | revise theorem from evidence | updated theorem note |
+| `07_final_report` | final package / report | handoff-ready bundle |
 
-### Q: Why is the workspace so large?
+## Preliminary Results
 
-The workspace is a git worktree (~source files only, no git history duplication). The `.venv` is now a symlink to `autoresearch/.venv` — a single shared 7 GB environment. Previously a new 7 GB venv was created per workspace because `autoresearch/.venv` did not exist; fixed by running `uv sync` in `autoresearch/`.
+The stable calibration artifacts are:
 
-### Q: Why can't I see the CoT (chain of thought) of the sub-agent?
+- descriptive report: [`workflow/artifacts/analysis-report.md`](workflow/artifacts/analysis-report.md)
+- statistical appendix: [`workflow/artifacts/stats-appendix.md`](workflow/artifacts/stats-appendix.md)
+- stricter rerun with current labeling: [`workflow/artifacts/calibration_analysis_current.json`](workflow/artifacts/calibration_analysis_current.json)
+- workflow gate rationale: [`workflow/artifacts/decision_gate_rationale.md`](workflow/artifacts/decision_gate_rationale.md)
 
-The `claude` CLI (`--print --output-format text`) exposes only final assistant text, not internal thinking. To expose reasoning, replace the subprocess `claude --print` call in `agents/claude_agent_runner.py:_invoke_claude_turn` with a direct Anthropic SDK call using `thinking={"type": "enabled", "budget_tokens": N}`.
+### Calibration Snapshot
 
-### Q: Can I close the terminal while agents are running?
+| Metric | `d00` | `d10` | Reading |
+| --- | ---: | ---: | --- |
+| Best-of-rep mean | `0.8905` | `0.9151` | `d10` not better |
+| All-runs mean | `1.0026` | `1.0127` | negligible quality gap |
+| Total runs | `47` | `69` | `d10` iterates faster |
+| Mean runs / rep | `9.4` | `13.8` | throughput advantage for `d10` |
+| Modes with `>=2` accepted edits | `1` | `1` | still degenerate for theorem ID |
 
-**No — not safely without extra steps.** The SLURM worker jobs run independently on compute nodes and survive terminal closure. However, the Python launcher process (`run_parallel_experiment.py`) and its child agent threads run on the login node as a regular process group. Closing the terminal sends SIGHUP to the process group, killing the launcher and all agent threads.
+### Visual Snapshot
 
-To safely detach: run `disown <PID>` in the terminal before closing. The launcher becomes an orphan process and continues running; agent threads survive with it.
+#### Quality
 
-If you accidentally close the terminal, the SLURM worker jobs keep running but nobody is reading their results — the experiment is effectively lost for that session (results can still be collected manually afterwards with `run_merge_phase.py`).
+![Phase 02 quality snapshot](docs/figures/phase02_quality.svg)
 
-### Q: Is the merge phase automatic after the experiment finishes?
+#### Search Behavior
 
-**No** — it must be run manually after the parallel experiment completes:
+![Phase 02 behavior snapshot](docs/figures/phase02_behavior.svg)
+
+#### Decision Split
+
+![Phase 02 gate snapshot](docs/figures/phase02_gate.svg)
+
+### Current Read
+
+The most honest current summary is:
+
+- memory improved **iteration throughput**;
+- memory did **not** show a convincing quality advantage on calibration;
+- accepted-mode structure is still too thin to claim empirical identification of the full `phi + G - epsilon` package;
+- the strict gate still favors **structured search** as the clean next step;
+- the `d01` / `d11` run is still worth collecting as exploratory evidence.
+
+## Where To Look
+
+### Core theory bundle
+
+- [`theory_validation_bp_20260412/README.md`](theory_validation_bp_20260412/README.md)
+- [`NEXT_REVIEWER_START_HERE.md`](NEXT_REVIEWER_START_HERE.md)
+- revised theory PDF: [`autoresearch_bp_revised.pdf`](autoresearch_bp_revised.pdf)
+- original theory note: [`autoresearch_bp.pdf`](autoresearch_bp.pdf)
+- BP source paper: [`BP.pdf`](BP.pdf)
+
+### Workflow and experiment state
+
+- workflow DAG: [`workflow/phases/`](workflow/phases/)
+- workflow scripts: [`workflow/scripts/`](workflow/scripts/)
+- workflow state: [`workflow/state.json`](workflow/state.json)
+- stable artifacts: [`workflow/artifacts/`](workflow/artifacts/)
+
+### Code paths that matter
+
+- launcher: [`src/agent_parallelization_new/launcher.py`](src/agent_parallelization_new/launcher.py)
+- orchestrator: [`src/agent_parallelization_new/orchestrator.py`](src/agent_parallelization_new/orchestrator.py)
+- agent runner: [`src/agent_parallelization_new/agents/claude_agent_runner.py`](src/agent_parallelization_new/agents/claude_agent_runner.py)
+- mode labeling: [`scripts/label_modes.py`](scripts/label_modes.py)
+- decomposition: [`scripts/compute_decomposition.py`](scripts/compute_decomposition.py)
+
+### Substrate and configs
+
+- substrate guide: [`CPU_SUBSTRATE_GUIDE.md`](CPU_SUBSTRATE_GUIDE.md)
+- implementation guide: [`IMPLEMENTATION_GUIDE.md`](IMPLEMENTATION_GUIDE.md)
+- training substrate: [`autoresearch/`](autoresearch/)
+- experiment configs: [`configs/`](configs/)
+
+### Generated evidence
+
+- completed runs are under `runs/` locally, but this directory is git-ignored for new experiment outputs;
+- stable summary artifacts are intentionally copied into `workflow/artifacts/` and `theory_validation_bp_20260412/`.
+
+## Repository Map
+
+| Path | What it contains |
+| --- | --- |
+| [`autoresearch/`](autoresearch/) | CIFAR-10 CPU substrate and evaluation target |
+| [`configs/`](configs/) | YAML configs for `d00`, `d10`, `d01`, `d11` |
+| [`docs/`](docs/) | diagrams, protocol notes, README figures |
+| [`scripts/`](scripts/) | labeling, decomposition, experiment helpers |
+| [`src/`](src/) | experiment engine and instrumentation |
+| [`tasks/`](tasks/) | implementation task queue used for the buildout |
+| [`theory_formalization_tasks/`](theory_formalization_tasks/) | later theory-refinement queue and prompt |
+| [`theory_validation_bp_20260412/`](theory_validation_bp_20260412/) | self-contained validation and reviewer bundle |
+| [`workflow/`](workflow/) | DAG, orchestration helpers, calibration artifacts, decision notes |
+
+## Key Documents
+
+- reviewer handoff: [`NEXT_REVIEWER_START_HERE.md`](NEXT_REVIEWER_START_HERE.md)
+- final verdict: [`theory_validation_bp_20260412/analysis/final_verdict.md`](theory_validation_bp_20260412/analysis/final_verdict.md)
+- reanalysis summary: [`theory_validation_bp_20260412/analysis/reanalysis_summary.md`](theory_validation_bp_20260412/analysis/reanalysis_summary.md)
+- estimator design: [`theory_validation_bp_20260412/analysis/estimator_design.md`](theory_validation_bp_20260412/analysis/estimator_design.md)
+- protocol compliance audit: [`theory_validation_bp_20260412/analysis/protocol_compliance_audit.md`](theory_validation_bp_20260412/analysis/protocol_compliance_audit.md)
+
+## Framework CLI
+
+The engine still supports the underlying experiment modes:
 
 ```bash
-uv run python scripts/run_merge_phase.py \
-  --experiment-dir runs/<experiment_id> \
-  --evaluate
+# single control
+run-single-long --config configs/experiment_d00.yaml
+
+# single agent with external memory
+python workflow/scripts/run_calibration.py --repo-root . --cells d10 --reps 1
+
+# parallel no-sharing
+run-parallel --config configs/experiment_d01.yaml
+
+# parallel shared-memory
+python -m agent_parallelization_new.launcher --help
 ```
 
-The `--evaluate` flag submits the merged `train.py` to SLURM for a final validation run. Without it, the merge candidate is produced but not scored.
+For the current research workflow, prefer the scripted workflow in [`workflow/`](workflow/) over the older ad hoc commands.
 
-## Modes
+## Notes
 
-| Mode | Command | Description |
-|---|---|---|
-| Parallel search | `run-parallel` | N independent agents × T budget |
-| Single long search | `run-single-long` | 1 agent × 2T budget (control) |
-| Capacity benchmark | `python scripts/benchmark_parallel_capacity.py` | Find empirical upper bound on N |
-| Merge phase | `python scripts/run_merge_phase.py` | Aggregate best results after parallel search |
-
-## Quick Start
-
-```bash
-# Run two parallel agents for 30 minutes each
-run-parallel --time-budget 30 --train-budget 360
-
-# Run single agent for 60 minutes (matched budget)
-run-single-long --time-budget 30 --train-budget 360
-
-# Or use a config file
-run-parallel --config configs/experiment.yaml
-```
-
-## Requirements
-
-- Python ≥ 3.10
-- Claude Code CLI (`claude`) in PATH
-- SLURM cluster (configure partition/gres in `configs/experiment.yaml`)
-- `uv` package manager
-
-## Configuration
-
-Edit `configs/experiment.yaml` to set agents, budget, model, and SLURM parameters:
-
-```yaml
-agents:
-  n: 2
-  model: claude-haiku-4-5-20251001
-  time_budget_minutes: 30
-  train_time_budget_seconds: 300
-
-slurm:
-  partition: pi_tpoggio
-  gres: gpu:1
-  time: "00:10:00"
-```
-
-## Architecture
-
-```
-src/agent_parallelization_new/
-  config.py              — ExperimentConfig, AgentConfig dataclasses
-  orchestrator.py        — launches and monitors sub-agents
-  budgeting.py           — wall-clock budget tracking (starts at GPU allocation)
-  snapshotting.py        — saves train.py snapshots on every change
-  reasoning_trace.py     — structured per-step reasoning logs
-  merger.py              — aggregates trajectories into a merged train.py
-  resource_benchmark.py  — empirical parallelism upper-bound estimation
-  agents/                — isolated subprocess runner, Claude CLI wrapper
-  outputs/               — schema, collector, evaluator, reporter
-  compatibility/         — SLURM training harness, script generators
-  utils/                 — git worktree management, log parsing
-```
-
-## TODO
-
-- [ ] **Agent-driven merge phase** — the current merge (`run_merge_phase.py`) is deterministic: it parses scalar hyperparameters with regex and picks the best value found per parameter. This is brittle and misses interactions between parameters. Replace it with a Claude agent that reads all agent trajectories, reasoning traces, and snapshots, reasons about which changes were causal vs. incidental, and produces a merged `train.py` by judgement rather than by greedy per-parameter selection.
-
-## Docs
-
-- [Parallel Capacity](docs/parallel_capacity.md)
-- [Merge Protocol](docs/merge_protocol.md)
-- [Workflow Diagram](docs/workflow_diagram.md)
+- Determinism was a major turning point: without it, the whole decomposition study was dominated by evaluation noise.
+- The revised theorem is intentionally narrower than the original note.
+- The most useful next milestone remains either:
+  - a clean structured-search interface, or
+  - a successful `d01` / `d11` exploratory result strong enough to justify revisiting the gate logic.

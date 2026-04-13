@@ -12,6 +12,12 @@ venv/
 runs/
 results/
 autoresearch/data/
+workflow/logs/
+theory_formalization_tasks/.runner_state/
+theory_validation_bp_20260412/theory/*.aux
+theory_validation_bp_20260412/theory/*.log
+theory_validation_bp_20260412/theory/*.out
+theory_validation_bp_20260412/artifacts/protocol_smoke/workspace/
 
 # Jupyter
 .ipynb_checkpoints/

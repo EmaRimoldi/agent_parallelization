@@ -7,8 +7,11 @@ Device: CPU only.
 
 from __future__ import annotations
 
+import os
+import random
 import time
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -23,6 +26,22 @@ from prepare import (
     evaluate_loss,
     get_train_loader,
 )
+
+
+# --- Determinism --------------------------------------------------------------
+SEED = 42
+
+
+def set_deterministic_seed(seed: int = SEED) -> None:
+    """Set all random seeds for full reproducibility."""
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    torch.use_deterministic_algorithms(True, warn_only=True)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
 
 # --- Architecture hyperparameters -------------------------------------------
@@ -48,7 +67,13 @@ LR_DECAY_EPOCHS = [60, 80]
 
 # --- Batch / data hyperparameters -------------------------------------------
 BATCH_SIZE = 128
-NUM_WORKERS = 2
+NUM_WORKERS = 0
+
+# --- Deterministic training budget ------------------------------------------
+# Fixed step count replaces the original time-based loop for reproducibility.
+# steps_per_epoch = 50000 // 128 = 390 (CIFAR-10, batch_size=128, drop_last=True)
+# ~0.1s per step on CPU → 585 steps ≈ 60s (matches train_time_budget_seconds)
+MAX_STEPS = 585
 
 
 class ConvBlock(nn.Module):
@@ -136,10 +161,11 @@ def main():
     device = "cpu"
     t_start = time.time()
 
-    seed = int(time.time() * 1000) % (2**32)
-    torch.manual_seed(seed)
+    set_deterministic_seed(SEED)
 
-    train_loader = get_train_loader(BATCH_SIZE, NUM_WORKERS)
+    g = torch.Generator()
+    g.manual_seed(SEED)
+    train_loader = get_train_loader(BATCH_SIZE, NUM_WORKERS, generator=g)
     steps_per_epoch = len(train_loader)
 
     model = CIFAR10Net().to(device)
@@ -150,8 +176,9 @@ def main():
     total_training_time = 0.0
     step = 0
     epoch = 0
+    done = False
 
-    while True:
+    while not done:
         model.train()
         epoch += 1
         for images, labels in train_loader:
@@ -171,9 +198,6 @@ def main():
             dt = time.time() - step_start
             total_training_time += dt
 
-            if total_training_time >= TIME_BUDGET:
-                break
-
             if torch.isnan(loss):
                 print("ERROR: NaN loss detected, aborting.")
                 print("---")
@@ -184,8 +208,9 @@ def main():
                 print(f"total_seconds:     {time.time() - t_start:.1f}")
                 return
 
-        if total_training_time >= TIME_BUDGET:
-            break
+            if step >= MAX_STEPS:
+                done = True
+                break
 
     val_loss = evaluate_loss(model, device)
     val_acc = evaluate_accuracy(model, device)

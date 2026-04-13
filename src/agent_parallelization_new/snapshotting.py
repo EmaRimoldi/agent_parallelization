@@ -218,6 +218,7 @@ Called by the sub-agent before each training run, after modifying train.py.
 """
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -228,6 +229,26 @@ WORKSPACE = Path(__file__).parent.resolve()
 SNAPSHOTS_DIR = Path("{snapshots_dir}")
 REASONING_DIR = Path("{reasoning_dir}")
 AGENT_ID = os.environ.get("AGENT_ID", "{agent_id}")
+
+def classify_hypothesis(text: str) -> str:
+    lowered = text.lower().replace("_", " ")
+    tokens = set(re.findall(r"[a-z0-9]+", lowered))
+    if any((phrase in lowered if " " in phrase else phrase in tokens) for phrase in ["lr", "learning rate", "scheduler", "warmup", "adam", "optimizer"]):
+        return "optimization"
+    if any((phrase in lowered if " " in phrase else phrase in tokens) for phrase in ["dropout", "weight decay", "regularization", "label smoothing"]):
+        return "regularization"
+    if any((phrase in lowered if " " in phrase else phrase in tokens) for phrase in ["batch", "augment", "mixup", "cutmix", "crop", "flip", "data"]):
+        return "data_pipeline"
+    if any((phrase in lowered if " " in phrase else phrase in tokens) for phrase in ["embed", "hidden", "width", "depth", "conv", "architecture", "head", "layer"]):
+        return "architecture"
+    if any((phrase in lowered if " " in phrase else phrase in tokens) for phrase in ["memory", "cache", "shared", "workspace", "retrieve"]):
+        return "memory_or_coordination"
+    return "other"
+
+def count_nonempty_lines(path: Path) -> int:
+    if not path.exists():
+        return 0
+    return sum(1 for line in path.read_text().splitlines() if line.strip())
 
 def main():
     args = sys.argv[1:]
@@ -252,6 +273,10 @@ def main():
     git_message = subprocess.run(
         ["git", "log", "-1", "--format=%s"], capture_output=True, text=True, cwd=WORKSPACE
     ).stdout.strip() or ""
+    strategy_category = classify_hypothesis(hypothesis)
+    shared_log = WORKSPACE / "shared_results_log.jsonl"
+    shared_memory_entries_visible = count_nonempty_lines(shared_log)
+    prior_trace_entries_visible = count_nonempty_lines(REASONING_DIR / "trace.jsonl")
 
     metadata = {{
         "step_index": step,
@@ -261,11 +286,14 @@ def main():
         "git_message": git_message,
         "hypothesis": hypothesis,
         "expected_effect": expected_effect,
+        "strategy_category": strategy_category,
         "evidence": "",
         "val_bpb_before": val_bpb_before,
         "val_bpb_after": None,
         "accepted": None,
         "reason": "",
+        "shared_memory_entries_visible": shared_memory_entries_visible,
+        "prior_trace_entries_visible": prior_trace_entries_visible,
         "changed_files": ["train.py"],
         "evaluation_command": "uv run train.py",
     }}
@@ -280,6 +308,9 @@ def main():
         "agent_id": AGENT_ID,
         "hypothesis": hypothesis,
         "expected_effect": expected_effect,
+        "strategy_category": strategy_category,
+        "shared_memory_entries_visible": shared_memory_entries_visible,
+        "prior_trace_entries_visible": prior_trace_entries_visible,
         "val_bpb_before": val_bpb_before,
         "val_bpb_after": None,
         "confirmed": None,

@@ -1,0 +1,21 @@
+{
+  "cell": "d01",
+  "replicate": "experiment_pilot_d01_rep3",
+  "candidate_source": "training_run",
+  "candidate_commit": "9e4a1327af018319bac471cd6985b4b89db2472d",
+  "candidate_agent_id": "agent_1",
+  "repeat_count": 1,
+  "values": [
+    0.809743
+  ],
+  "mean_val_bpb": 0.809743,
+  "std_val_bpb": 0.0,
+  "selected_candidate_pilot_val_bpb": 0.836845,
+  "logs": [
+    {
+      "run_index": 1,
+      "val_bpb": 0.809743,
+      "log_path": "/Users/emanuelerimoldi/Documents/GitHub/agent_parallelization/theory_validation_bp_20260412/experiments/followup_01/replicated_means/d01/experiment_pilot_d01_rep3/run_01.log"
+    }
+  ]
+}

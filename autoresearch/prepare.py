@@ -6,14 +6,22 @@ from __future__ import annotations
 
 import os
 import pickle
+import random
 import tarfile
 import urllib.request
 from pathlib import Path
+from typing import Optional
 
 import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
+
+# --- Determinism preamble (module-level) ------------------------------------
+random.seed(42)
+np.random.seed(42)
+torch.manual_seed(42)
+os.environ["PYTHONHASHSEED"] = "42"
 
 try:
     from torchvision import datasets, transforms  # type: ignore
@@ -178,7 +186,11 @@ def _load_cifar_split(root: str | Path, train: bool) -> tuple[np.ndarray, np.nda
     return np.concatenate(data_parts, axis=0), np.concatenate(target_parts, axis=0)
 
 
-def get_train_loader(batch_size: int, num_workers: int = 2) -> DataLoader:
+def get_train_loader(
+    batch_size: int,
+    num_workers: int = 0,
+    generator: Optional[torch.Generator] = None,
+) -> DataLoader:
     """Returns training dataloader. Downloads data on first call."""
     if datasets is not None:
         dataset = datasets.CIFAR10(
@@ -193,10 +205,11 @@ def get_train_loader(batch_size: int, num_workers: int = 2) -> DataLoader:
         num_workers=num_workers,
         pin_memory=False,
         drop_last=True,
+        generator=generator,
     )
 
 
-def get_val_loader(batch_size: int = EVAL_BATCH_SIZE, num_workers: int = 2) -> DataLoader:
+def get_val_loader(batch_size: int = EVAL_BATCH_SIZE, num_workers: int = 0) -> DataLoader:
     """Returns validation dataloader. Downloads data on first call."""
     if datasets is not None:
         dataset = datasets.CIFAR10(
