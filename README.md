@@ -300,11 +300,11 @@ This table is the main traceability map between AI passes and artifact families.
 | --- | --- |
 | [`ai_task_passes/`](ai_task_passes/) | unified archive of the two AI task passes |
 | [`autoresearch/`](autoresearch/) | CIFAR-10 CPU substrate and evaluation target |
-| [`configs/`](configs/) | YAML configs for `d00`, `d10`, `d01`, `d11` |
+| [`configs/`](configs/) | launcher and cell configs; see [`configs/README.md`](configs/README.md) |
 | [`docs/`](docs/) | guides and handoff notes |
 | [`docs/guides/`](docs/guides/) | implementation guide, substrate guide, and pilot protocol moved out of root |
 | [`docs/handoffs/`](docs/handoffs/) | reviewer-facing entry points and handoff notes moved out of root |
-| [`results/`](results/) | aggregate outputs plus the unified figure archive under `results/figures/` |
+| [`results/`](results/) | Pass 01 pilot aggregates plus the unified figure archive; see [`results/README.md`](results/README.md) |
 | [`runs/`](runs/) | raw smoke, pilot, and calibration experiment directories |
 | [`scripts/`](scripts/) | labeling, decomposition, experiment helpers |
 | [`src/`](src/) | experiment engine and instrumentation |
