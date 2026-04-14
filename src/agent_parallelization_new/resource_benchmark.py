@@ -222,29 +222,16 @@ class ParallelCapacityBenchmark:
             timestamp=datetime.now(timezone.utc).isoformat(),
         )
 
-        pool_results: list[WorkloadResult] = [None] * n  # type: ignore
-
-        def worker(idx: int, out_list: list) -> None:
-            start = time.monotonic()
-            try:
-                _mock_workload(self.workload_duration_seconds)
-                elapsed = time.monotonic() - start
-                out_list[idx] = WorkloadResult(
-                    worker_id=idx, success=True, elapsed_seconds=elapsed
-                )
-            except Exception as e:
-                elapsed = time.monotonic() - start
-                out_list[idx] = WorkloadResult(
-                    worker_id=idx, success=False, elapsed_seconds=elapsed, error=str(e)
-                )
-
         # Use multiprocessing to mirror the real orchestrator behaviour
         with multiprocessing.Manager() as mgr:
             shared = mgr.list([None] * n)
             procs = []
             t0 = time.monotonic()
             for idx in range(n):
-                p = multiprocessing.Process(target=worker, args=(idx, shared))
+                p = multiprocessing.Process(
+                    target=_benchmark_worker,
+                    args=(idx, shared, self.workload_duration_seconds),
+                )
                 p.start()
                 procs.append(p)
 
@@ -417,6 +404,26 @@ def _mock_workload(duration: float) -> None:
         check=True,
         capture_output=True,
     )
+
+
+def _benchmark_worker(idx: int, out_list: list, duration: float) -> None:
+    """Run one mock workload and store a picklable result.
+
+    This must be module-level for Python's spawn multiprocessing context
+    (macOS / Python 3.13), where nested functions cannot be pickled.
+    """
+    start = time.monotonic()
+    try:
+        _mock_workload(duration)
+        elapsed = time.monotonic() - start
+        out_list[idx] = WorkloadResult(
+            worker_id=idx, success=True, elapsed_seconds=elapsed
+        )
+    except Exception as e:
+        elapsed = time.monotonic() - start
+        out_list[idx] = WorkloadResult(
+            worker_id=idx, success=False, elapsed_seconds=elapsed, error=str(e)
+        )
 
 
 def _guess_bottleneck() -> str:

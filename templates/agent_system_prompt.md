@@ -138,8 +138,9 @@ These are mandatory. The merge orchestrator cannot reconstruct trajectories with
 
 ## What to focus on
 
-**The goal is simple: get the lowest val_bpb.** Since the time budget is fixed, you don't need to
-worry about training time — each run gets about {{TRAIN_TIME_BUDGET_MIN}} minutes of training time.
+**The goal is simple: get the lowest val_bpb.** The evaluator is preconfigured as:
+{{EVALUATOR_BUDGET_DESCRIPTION}}. Do not change the evaluator stopping rule or
+training harness; optimize `train.py` under that rule.
 Everything is fair game: change the
 architecture, the optimizer, the hyperparameters, the batch size, the model size. The only
 constraints are that the code runs without crashing and finishes within the time budget.
@@ -155,9 +156,8 @@ improvement that adds 20 lines of hacky code? Probably not worth it. A 0.001 val
 improvement from deleting code? Definitely keep. An improvement of ~0 but much simpler
 code? Keep.
 
-**Timeout**: Each training run should take roughly {{TRAIN_TIME_BUDGET_MIN}} minutes of training
-plus some fixed harness overhead. If `run_on_worker.sh` stalls far beyond that, treat it as a
-failure — discard the commit and move on.
+**Timeout**: Each training run is bounded by the configured evaluator timeout. If
+`run_on_worker.sh` stalls far beyond that, treat it as a failure — discard the commit and move on.
 
 **Crashes**: Use your judgment. If it's something easy to fix (typo, missing import), fix and
 re-run. If the idea is fundamentally broken, log "crash", revert, and move on.

@@ -75,23 +75,32 @@ _HYPERPARAM_RE = re.compile(
 TUNABLE_PARAMS: set[str] = set()
 
 
+def _coerce_hyperparam_value(value: str):
+    """Return a numeric value when safe, otherwise preserve the source string."""
+    stripped = value.strip()
+    if re.fullmatch(r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?", stripped):
+        return float(stripped)
+    return stripped
+
+
 def _detect_tunable_params(train_py: str) -> set[str]:
     """Return the set of all UPPERCASE param names found in train_py."""
     return {m.group("name") for m in _HYPERPARAM_RE_FULL.finditer(train_py)}
 
 
-def extract_hyperparams(train_py: str) -> dict[str, str]:
+def extract_hyperparams(train_py: str) -> dict[str, object]:
     """Extract all UPPERCASE hyperparameter values from train.py source.
 
-    Returns string values so that tuples, strings, and numerics are preserved.
+    Numeric scalar values are returned as floats; non-scalar values such as
+    tuples and strings are preserved as source strings.
     """
-    params: dict[str, str] = {}
+    params: dict[str, object] = {}
     for m in _HYPERPARAM_RE_FULL.finditer(train_py):
-        params[m.group("name")] = m.group("value").strip()
+        params[m.group("name")] = _coerce_hyperparam_value(m.group("value"))
     return params
 
 
-def apply_hyperparams(train_py: str, params: dict[str, str]) -> str:
+def apply_hyperparams(train_py: str, params: dict[str, object]) -> str:
     """Replace hyperparameter values in train.py source (string-based)."""
     result = train_py
     for name, value in params.items():
@@ -579,13 +588,14 @@ class MergeOrchestrator:
         self,
         baseline_train_py: Optional[Path] = None,
         evaluation_workspace: Optional[Path] = None,
-        agent_based: bool = True,
+        evaluate: bool = True,
+        agent_based: bool = False,
         agent_model: str = "claude-opus-4-6",
     ) -> MergeResults:
         """Execute the full merge pipeline.
 
-        Evaluation is always performed: after producing the merged candidate,
-        a training run is submitted to measure its val_bpb.
+        Evaluation is optional: after producing the merged candidate, a
+        training run can be submitted to measure its val_bpb.
 
         Parameters
         ----------
@@ -595,8 +605,8 @@ class MergeOrchestrator:
             Pre-configured workspace with submit/check scripts for evaluation.
             Auto-detected from the first agent workspace if not provided.
         agent_based : bool
-            If True (default), use a Claude agent to produce the merged candidate.
-            If False, use the deterministic parameter-level merge.
+            If True, use a Claude agent to produce the merged candidate.
+            If False (default), use the deterministic parameter-level merge.
         agent_model : str
             Claude model to use when agent_based=True.
         """
@@ -667,28 +677,28 @@ class MergeOrchestrator:
             json.dumps(plan.to_dict(), indent=2)
         )
 
-        # Step 5: Evaluate — always run; auto-detect workspace if not supplied
-        if evaluation_workspace is None:
+        # Step 5: Evaluate — auto-detect workspace if evaluation was requested
+        if evaluate and evaluation_workspace is None:
             for agent_dir in sorted(self.mode_dir.glob("agent_*")):
                 ws = agent_dir / "workspace"
                 if (ws / "submit_training.sh").exists():
                     evaluation_workspace = ws
                     print(f"[merger] Auto-detected evaluation workspace: {ws}")
                     break
-        if evaluation_workspace is None:
+        if evaluate and evaluation_workspace is None:
             print(
                 "[merger] Step 5: No evaluation workspace found — skipping evaluation.",
                 file=__import__("sys").stderr,
             )
 
         merge_val_bpb: Optional[float] = None
-        if evaluation_workspace is not None:
+        if evaluate and evaluation_workspace is not None:
             print("[merger] Step 5: Evaluating merged candidate...")
             merge_val_bpb = self.evaluate_candidate(merged, evaluation_workspace)
             merged.val_bpb = merge_val_bpb
             print(f"[merger] Merged val_bpb = {merge_val_bpb}")
         else:
-            print("[merger] Step 5: Evaluation skipped (no workspace available).")
+            print("[merger] Step 5: Evaluation skipped.")
 
         # Step 6: Summarise
         merge_won: Optional[bool] = None

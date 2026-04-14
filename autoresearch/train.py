@@ -46,7 +46,7 @@ def set_deterministic_seed(seed: int = SEED) -> None:
 
 # --- Architecture hyperparameters -------------------------------------------
 DEPTH = 3
-BASE_CHANNELS = 32
+BASE_CHANNELS = 30
 CHANNEL_MULT = 2
 USE_BATCHNORM = True
 DROPOUT_RATE = 0.0
@@ -54,13 +54,13 @@ FC_HIDDEN = 128
 
 # --- Optimizer hyperparameters ----------------------------------------------
 OPTIMIZER = "adam"
-LEARNING_RATE = 1e-3
+LEARNING_RATE = 5e-4
 WEIGHT_DECAY = 1e-4
 MOMENTUM = 0.9
 ADAM_BETAS = (0.9, 0.999)
 
 # --- LR schedule hyperparameters --------------------------------------------
-USE_LR_SCHEDULE = True
+USE_LR_SCHEDULE = False
 WARMUP_EPOCHS = 2
 LR_DECAY_FACTOR = 0.1
 LR_DECAY_EPOCHS = [60, 80]
@@ -70,9 +70,17 @@ BATCH_SIZE = 128
 NUM_WORKERS = 0
 
 # --- Training budget --------------------------------------------------------
-# Use time-based stopping via AUTOSEARCH_TIME_BUDGET env var (seconds).
-# Falls back to TIME_BUDGET from prepare.py (120s) if env var not set.
+# Default evaluator is time-based for compatibility with older runs.
+# Set AUTOSEARCH_MAX_STEPS to switch to fixed-step evaluation. In that mode
+# validation quality is no longer affected by how much CPU/GPU time a process
+# happened to receive during a fixed wall-clock window.
 TRAIN_TIME_BUDGET = int(os.environ.get("AUTOSEARCH_TIME_BUDGET", str(TIME_BUDGET)))
+TRAIN_MAX_STEPS = (
+    int(os.environ["AUTOSEARCH_MAX_STEPS"])
+    if os.environ.get("AUTOSEARCH_MAX_STEPS")
+    else None
+)
+EVALUATOR_MODE = "fixed_steps" if TRAIN_MAX_STEPS is not None else "fixed_time"
 
 
 class ConvBlock(nn.Module):
@@ -207,7 +215,12 @@ def main():
                 print(f"total_seconds:     {time.time() - t_start:.1f}")
                 return
 
-            if total_training_time >= TRAIN_TIME_BUDGET:
+            if TRAIN_MAX_STEPS is not None:
+                should_stop = step >= TRAIN_MAX_STEPS
+            else:
+                should_stop = total_training_time >= TRAIN_TIME_BUDGET
+
+            if should_stop:
                 done = True
                 break
 
@@ -226,6 +239,9 @@ def main():
     print(f"total_steps:       {step}")
     print(f"total_epochs:      {epoch}")
     print(f"param_count:       {param_count}")
+    print(f"evaluator_mode:    {EVALUATOR_MODE}")
+    print(f"train_time_budget: {TRAIN_TIME_BUDGET}")
+    print(f"train_max_steps:   {TRAIN_MAX_STEPS if TRAIN_MAX_STEPS is not None else 'none'}")
 
 
 if __name__ == "__main__":

@@ -22,7 +22,15 @@ from typing import Optional
 from agent_parallelization_new.agents.base import AgentRunner
 from agent_parallelization_new.budgeting import BudgetTracker
 from agent_parallelization_new.config import AgentConfig
-from agent_parallelization_new.utils.log_parser import parse_training_seconds, parse_val_bpb
+from agent_parallelization_new.utils.log_parser import (
+    parse_evaluator_mode,
+    parse_total_seconds,
+    parse_total_steps,
+    parse_train_max_steps,
+    parse_train_time_budget,
+    parse_training_seconds,
+    parse_val_bpb,
+)
 
 
 def _ts() -> str:
@@ -298,6 +306,7 @@ class ClaudeAgentRunner(AgentRunner):
 
                 turn_start = time.monotonic()
                 self._training_runs_this_turn = 0
+                self._turn_evaluator_wall_seconds = 0.0
                 self._pending_turn_stop_at = None
                 self._turn_started_at = turn_start
                 self._turn_training_started = False
@@ -336,6 +345,10 @@ class ClaudeAgentRunner(AgentRunner):
                 system_prompt_chars = len(effective_system_prompt) if effective_system_prompt else 0
                 turn_msg_chars = len(turn_msg)
                 response_chars = len(output)
+                evaluator_wall_seconds = float(
+                    getattr(self, "_turn_evaluator_wall_seconds", 0.0) or 0.0
+                )
+                deliberation_wall_seconds = max(turn_elapsed - evaluator_wall_seconds, 0.0)
 
                 input_tokens = _coerce_token_count(usage.get("input_tokens"))
                 if input_tokens is None:
@@ -360,6 +373,8 @@ class ClaudeAgentRunner(AgentRunner):
                     "response_chars": response_chars,
                     "context_fill_ratio": self._estimate_context_fill(),
                     "wall_clock_seconds": turn_elapsed,
+                    "agent_deliberation_wall_seconds": deliberation_wall_seconds,
+                    "evaluator_wall_seconds": evaluator_wall_seconds,
                     "protocol_mode": protocol_mode,
                     "memory_context_visible": memory_context_visible,
                     "memory_context_entries": memory_context_entries,
@@ -581,6 +596,24 @@ class ClaudeAgentRunner(AgentRunner):
                 training_seconds = (
                     parse_training_seconds(train_out) if train_out.exists() else None
                 )
+                train_total_seconds = (
+                    parse_total_seconds(train_out) if train_out.exists() else None
+                )
+                total_steps = parse_total_steps(train_out) if train_out.exists() else None
+                evaluator_mode = (
+                    parse_evaluator_mode(train_out) if train_out.exists() else None
+                )
+                train_time_budget = (
+                    parse_train_time_budget(train_out) if train_out.exists() else None
+                )
+                train_max_steps = (
+                    parse_train_max_steps(train_out) if train_out.exists() else None
+                )
+                if wall_seconds is not None:
+                    self._turn_evaluator_wall_seconds = (
+                        float(getattr(self, "_turn_evaluator_wall_seconds", 0.0) or 0.0)
+                        + float(wall_seconds)
+                    )
                 self._training_run_count += 1
                 self._training_runs_this_turn = getattr(
                     self, "_training_runs_this_turn", 0
@@ -593,6 +626,11 @@ class ClaudeAgentRunner(AgentRunner):
                     finished_at=finished_at,
                     wall_seconds=wall_seconds,
                     training_seconds=training_seconds,
+                    train_total_seconds=train_total_seconds,
+                    total_steps=total_steps,
+                    evaluator_mode=evaluator_mode,
+                    train_time_budget=train_time_budget,
+                    train_max_steps=train_max_steps,
                     parsed_val_bpb=parsed_val_bpb,
                 )
 
@@ -950,6 +988,12 @@ class ClaudeAgentRunner(AgentRunner):
         env["AGENT_ID"] = self.config.agent_id
         env["RESULTS_ROOT"] = str(self.results_dir)
         env["AUTOSEARCH_TIME_BUDGET"] = str(self.config.train_time_budget_seconds)
+        if self.config.train_max_steps is not None:
+            env["AUTOSEARCH_MAX_STEPS"] = str(self.config.train_max_steps)
+            env["AUTOSEARCH_EVALUATOR_MODE"] = "fixed_steps"
+        else:
+            env.pop("AUTOSEARCH_MAX_STEPS", None)
+            env["AUTOSEARCH_EVALUATOR_MODE"] = "fixed_time"
         env["CUDA_VISIBLE_DEVICES"] = self.config.cuda_device
         env["EXPERIMENT_ID"] = experiment_id
         extra_path = ":".join([
@@ -1157,6 +1201,11 @@ class ClaudeAgentRunner(AgentRunner):
         finished_at: float,
         wall_seconds: Optional[float],
         training_seconds: Optional[float],
+        train_total_seconds: Optional[float],
+        total_steps: Optional[int],
+        evaluator_mode: Optional[str],
+        train_time_budget: Optional[int],
+        train_max_steps: Optional[int],
         parsed_val_bpb: Optional[float],
     ) -> dict[str, object]:
         context = dict(run_context or self._prepare_training_run_context(run_git_state))
@@ -1276,7 +1325,15 @@ class ClaudeAgentRunner(AgentRunner):
             "started_at": run_wall_start,
             "finished_at": finished_at,
             "wall_seconds": wall_seconds,
+            "evaluator_wall_seconds": wall_seconds,
             "training_seconds": training_seconds,
+            "train_total_seconds": train_total_seconds,
+            "total_steps": total_steps,
+            "evaluator_mode": evaluator_mode or (
+                "fixed_steps" if self.config.train_max_steps is not None else "fixed_time"
+            ),
+            "train_time_budget": train_time_budget or self.config.train_time_budget_seconds,
+            "train_max_steps": train_max_steps or self.config.train_max_steps,
             "val_bpb": parsed_val_bpb,
             "status": "success" if parsed_val_bpb is not None else "crash",
             "commit": run_git_state.get("commit"),
@@ -1333,6 +1390,16 @@ class ClaudeAgentRunner(AgentRunner):
             for record in turn_records
             if record.get("total_tokens") is not None
         ]
+        deliberation_wall_seconds = [
+            float(record.get("agent_deliberation_wall_seconds"))
+            for record in turn_records
+            if record.get("agent_deliberation_wall_seconds") is not None
+        ]
+        evaluator_wall_seconds = [
+            float(record.get("evaluator_wall_seconds"))
+            for record in turn_records
+            if record.get("evaluator_wall_seconds") is not None
+        ]
         metadata = {
             "agent_id": self.config.agent_id,
             "run_id": run_id,
@@ -1350,6 +1417,12 @@ class ClaudeAgentRunner(AgentRunner):
             ),
             "turn_wall_clock_seconds_mean": self._mean(turn_wall_seconds),
             "turn_wall_clock_seconds_std": self._stddev(turn_wall_seconds),
+            "agent_deliberation_wall_seconds_total": sum(deliberation_wall_seconds),
+            "agent_deliberation_wall_seconds_mean": self._mean(deliberation_wall_seconds),
+            "agent_deliberation_wall_seconds_std": self._stddev(deliberation_wall_seconds),
+            "evaluator_wall_seconds_total": sum(evaluator_wall_seconds),
+            "evaluator_wall_seconds_mean": self._mean(evaluator_wall_seconds),
+            "evaluator_wall_seconds_std": self._stddev(evaluator_wall_seconds),
             "turn_total_tokens_mean": self._mean(turn_total_tokens),
             "turn_total_tokens_std": self._stddev(turn_total_tokens),
             "avg_context_fill": (
@@ -1363,6 +1436,11 @@ class ClaudeAgentRunner(AgentRunner):
                 if turn_records
                 else 0.0
             ),
+            "evaluator_mode": (
+                "fixed_steps" if self.config.train_max_steps is not None else "fixed_time"
+            ),
+            "train_max_steps": self.config.train_max_steps,
+            "train_time_budget_seconds": self.config.train_time_budget_seconds,
         }
         meta_path = self.results_dir / "metadata.json"
         meta_path.write_text(json.dumps(metadata, indent=2))
@@ -1415,10 +1493,17 @@ class ClaudeAgentRunner(AgentRunner):
                 for row in training_runs
                 if row.get("training_seconds") is not None
             ]
+            step_values = [
+                int(row["total_steps"])
+                for row in training_runs
+                if row.get("total_steps") is not None
+            ]
             metadata["training_run_wall_seconds_mean"] = self._mean(wall_values)
             metadata["training_run_wall_seconds_std"] = self._stddev(wall_values)
             metadata["training_run_seconds_mean"] = self._mean(training_values)
             metadata["training_run_seconds_std"] = self._stddev(training_values)
+            metadata["training_run_total_steps_mean"] = self._mean(step_values)
+            metadata["training_run_total_steps_std"] = self._stddev(step_values)
             metadata["reevaluation_run_count"] = sum(
                 1 for row in training_runs if row.get("is_reevaluation")
             )

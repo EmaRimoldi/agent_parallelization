@@ -79,6 +79,19 @@ def test_parallel_budget_matches_single_budget():
     assert parallel_total == single_total == 2 * T
 
 
+def test_fixed_step_config_propagates_to_agents():
+    config = ExperimentConfig.make_parallel(
+        experiment_id="test_parallel",
+        time_budget_minutes=30,
+        train_time_budget_seconds=300,
+        train_max_steps=1170,
+        repo_root="/tmp",
+    )
+
+    assert config.train_max_steps == 1170
+    assert all(agent.train_max_steps == 1170 for agent in config.agents)
+
+
 def test_agent_stops_after_budget():
     """BudgetTracker.should_stop() returns True when remaining <= 30s."""
     tracker = BudgetTracker(wall_clock_budget_seconds=31)

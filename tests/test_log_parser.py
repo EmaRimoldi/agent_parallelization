@@ -11,6 +11,11 @@ sys.path.insert(0, str(Path(__file__).parents[1] / "src"))
 from agent_parallelization_new.utils.log_parser import (
     parse_val_bpb,
     parse_training_seconds,
+    parse_total_seconds,
+    parse_total_steps,
+    parse_evaluator_mode,
+    parse_train_time_budget,
+    parse_train_max_steps,
     parse_peak_vram_mb,
     training_completed,
     training_crashed,
@@ -28,6 +33,10 @@ total_tokens_M:   499.6
 num_steps:        350
 num_params_M:     50.3
 depth:            12
+total_steps:       1170
+evaluator_mode:    fixed_steps
+train_time_budget: 300
+train_max_steps:   1170
 """
 
 CRASH_LOG = """\
@@ -59,6 +68,20 @@ def test_parse_training_seconds():
     try:
         result = parse_training_seconds(path)
         assert result == pytest.approx(300.1)
+    finally:
+        path.unlink()
+
+
+def test_parse_fixed_step_evaluator_metrics():
+    with tempfile.NamedTemporaryFile("w", suffix=".log", delete=False) as f:
+        f.write(REAL_LOG)
+        path = Path(f.name)
+    try:
+        assert parse_total_seconds(path) == pytest.approx(325.9)
+        assert parse_total_steps(path) == 1170
+        assert parse_evaluator_mode(path) == "fixed_steps"
+        assert parse_train_time_budget(path) == 300
+        assert parse_train_max_steps(path) == 1170
     finally:
         path.unlink()
 

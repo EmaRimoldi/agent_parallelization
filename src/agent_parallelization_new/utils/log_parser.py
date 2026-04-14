@@ -31,6 +31,66 @@ def parse_training_seconds(log_path: Path) -> Optional[float]:
     return None
 
 
+def parse_total_seconds(log_path: Path) -> Optional[float]:
+    """Extract total_seconds from a training log."""
+    try:
+        text = log_path.read_text()
+    except (FileNotFoundError, OSError):
+        return None
+    m = re.search(r"^total_seconds:\s*([\d.]+)", text, re.MULTILINE)
+    if m:
+        return float(m.group(1))
+    return None
+
+
+def parse_total_steps(log_path: Path) -> Optional[int]:
+    """Extract total_steps from a training log."""
+    try:
+        text = log_path.read_text()
+    except (FileNotFoundError, OSError):
+        return None
+    m = re.search(r"^total_steps:\s*(\d+)", text, re.MULTILINE)
+    if m:
+        return int(m.group(1))
+    return None
+
+
+def parse_evaluator_mode(log_path: Path) -> Optional[str]:
+    """Extract evaluator_mode from a training log."""
+    try:
+        text = log_path.read_text()
+    except (FileNotFoundError, OSError):
+        return None
+    m = re.search(r"^evaluator_mode:\s*([A-Za-z0-9_-]+)", text, re.MULTILINE)
+    if m:
+        return m.group(1)
+    return None
+
+
+def parse_train_time_budget(log_path: Path) -> Optional[int]:
+    """Extract train_time_budget from a training log."""
+    try:
+        text = log_path.read_text()
+    except (FileNotFoundError, OSError):
+        return None
+    m = re.search(r"^train_time_budget:\s*(\d+)", text, re.MULTILINE)
+    if m:
+        return int(m.group(1))
+    return None
+
+
+def parse_train_max_steps(log_path: Path) -> Optional[int]:
+    """Extract train_max_steps from a training log."""
+    try:
+        text = log_path.read_text()
+    except (FileNotFoundError, OSError):
+        return None
+    m = re.search(r"^train_max_steps:\s*(\d+|none)", text, re.MULTILINE)
+    if not m or m.group(1) == "none":
+        return None
+    return int(m.group(1))
+
+
 def parse_peak_vram_mb(log_path: Path) -> Optional[float]:
     """Extract peak_vram_mb from run.log."""
     try:
@@ -65,6 +125,11 @@ def parse_all_metrics(log_path: Path) -> dict:
     return {
         "val_bpb": parse_val_bpb(log_path),
         "training_seconds": parse_training_seconds(log_path),
+        "total_seconds": parse_total_seconds(log_path),
+        "total_steps": parse_total_steps(log_path),
+        "evaluator_mode": parse_evaluator_mode(log_path),
+        "train_time_budget": parse_train_time_budget(log_path),
+        "train_max_steps": parse_train_max_steps(log_path),
         "peak_vram_mb": parse_peak_vram_mb(log_path),
         "completed": training_completed(log_path),
         "crashed": training_crashed(log_path),

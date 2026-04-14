@@ -26,6 +26,14 @@ The current empirical reading remains split:
 - the stricter calibration gate remains weak and currently points to `structured_search` rather than a clean `proceed`;
 - the second pass is therefore best read as **theory-tightening plus exploratory continuation**, not as a final theorem validation.
 
+Reviewer-grade confirmatory support has now been added for the next run family:
+fixed-step evaluation, optional serialized evaluator locking, separated
+deliberation/evaluator timing, and a `T_wall` / `T_cost` hitting-time analysis.
+See [`docs/reviewer_grade_protocol.md`](docs/reviewer_grade_protocol.md).
+Before running that 2x2, use
+[`docs/baseline_headroom_calibration.md`](docs/baseline_headroom_calibration.md)
+to choose a baseline and `q*` from controlled non-agentic calibration evidence.
+
 ## AI Task Passes
 
 The repository is now organized around two major AI task passes:

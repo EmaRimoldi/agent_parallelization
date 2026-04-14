@@ -15,6 +15,7 @@ class AgentConfig:
     agent_id: str
     time_budget_minutes: int = 30
     train_time_budget_seconds: int = 300
+    train_max_steps: Optional[int] = None
     cuda_device: str = "0"
     model: str = "claude-sonnet-4-6"
     temperature: Optional[float] = None
@@ -48,6 +49,12 @@ class ExperimentConfig:
     mode: str  # "parallel" | "single_long" | "parallel_capacity_benchmark" | "merge_search"
     base_time_budget_minutes: int = 30
     train_time_budget_seconds: int = 300
+    train_max_steps: Optional[int] = None
+    evaluator_concurrency: str = "parallel"  # "parallel" | "serialized"
+    target_val_bpb: Optional[float] = None
+    success_confidence: float = 0.80
+    llm_token_price: float = 1.0
+    evaluator_hour_price: float = 0.0
     autoresearch_dir: str = "autoresearch"
     results_root: str = "results"
     agents: list[AgentConfig] = field(default_factory=list)
@@ -72,18 +79,21 @@ class ExperimentConfig:
         time_budget_minutes: int,
         train_time_budget_seconds: int,
         repo_root: str,
+        train_max_steps: Optional[int] = None,
     ) -> "ExperimentConfig":
         agents = [
             AgentConfig(
                 agent_id="agent_0",
                 time_budget_minutes=time_budget_minutes,
                 train_time_budget_seconds=train_time_budget_seconds,
+                train_max_steps=train_max_steps,
                 cuda_device="0",
             ),
             AgentConfig(
                 agent_id="agent_1",
                 time_budget_minutes=time_budget_minutes,
                 train_time_budget_seconds=train_time_budget_seconds,
+                train_max_steps=train_max_steps,
                 cuda_device="1",
             ),
         ]
@@ -92,6 +102,7 @@ class ExperimentConfig:
             mode="parallel",
             base_time_budget_minutes=time_budget_minutes,
             train_time_budget_seconds=train_time_budget_seconds,
+            train_max_steps=train_max_steps,
             repo_root=repo_root,
             agents=agents,
         )
@@ -105,6 +116,7 @@ class ExperimentConfig:
         train_time_budget_seconds: int,
         repo_root: str,
         cuda_devices: Optional[list[str]] = None,
+        train_max_steps: Optional[int] = None,
     ) -> "ExperimentConfig":
         """Create config for N independent parallel agents.
 
@@ -124,6 +136,7 @@ class ExperimentConfig:
                 agent_id=f"agent_{i}",
                 time_budget_minutes=time_budget_minutes,
                 train_time_budget_seconds=train_time_budget_seconds,
+                train_max_steps=train_max_steps,
                 cuda_device=cuda_devices[i],
             )
             for i in range(n_agents)
@@ -133,6 +146,7 @@ class ExperimentConfig:
             mode="parallel",
             base_time_budget_minutes=time_budget_minutes,
             train_time_budget_seconds=train_time_budget_seconds,
+            train_max_steps=train_max_steps,
             repo_root=repo_root,
             agents=agents,
         )
@@ -144,12 +158,14 @@ class ExperimentConfig:
         time_budget_minutes: int,
         train_time_budget_seconds: int,
         repo_root: str,
+        train_max_steps: Optional[int] = None,
     ) -> "ExperimentConfig":
         agents = [
             AgentConfig(
                 agent_id="agent_0",
                 time_budget_minutes=time_budget_minutes * 2,
                 train_time_budget_seconds=train_time_budget_seconds,
+                train_max_steps=train_max_steps,
                 cuda_device="0",
             ),
         ]
@@ -158,6 +174,7 @@ class ExperimentConfig:
             mode="single_long",
             base_time_budget_minutes=time_budget_minutes,
             train_time_budget_seconds=train_time_budget_seconds,
+            train_max_steps=train_max_steps,
             repo_root=repo_root,
             agents=agents,
         )
@@ -169,12 +186,14 @@ class ExperimentConfig:
         time_budget_minutes: int,
         train_time_budget_seconds: int,
         repo_root: str,
+        train_max_steps: Optional[int] = None,
     ) -> "ExperimentConfig":
         config = cls.make_single_long(
             experiment_id=experiment_id,
             time_budget_minutes=time_budget_minutes,
             train_time_budget_seconds=train_time_budget_seconds,
             repo_root=repo_root,
+            train_max_steps=train_max_steps,
         )
         config.mode = "single_memory"
         config.agents[0].use_external_memory = True
@@ -191,12 +210,16 @@ class ExperimentConfig:
         raw = yaml.safe_load(path.read_text())
         exp   = raw.get("experiment", {})
         ag    = raw.get("agents", {})
+        eval_ = raw.get("evaluator", {})
         slurm = raw.get("slurm", {})
         tmpl  = raw.get("templates", {})
 
         mode     = exp.get("mode", "parallel")
         budget   = int(ag.get("time_budget_minutes", 30))
         train_s  = int(ag.get("train_time_budget_seconds", 300))
+        train_max_steps = _optional_int(
+            ag.get("train_max_steps", eval_.get("train_max_steps"))
+        )
         n_agents = int(ag.get("n", 2))
         model    = ag.get("model", "claude-haiku-4-5-20251001")
         temp     = ag.get("temperature", None)
@@ -212,6 +235,12 @@ class ExperimentConfig:
         devices = [str(d) for d in devices]
 
         experiment_id = exp.get("id") or f"exp_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        evaluator_concurrency = str(eval_.get("concurrency", "parallel"))
+        if evaluator_concurrency not in {"parallel", "serialized"}:
+            raise ValueError(
+                "evaluator.concurrency must be 'parallel' or 'serialized' "
+                f"(got {evaluator_concurrency!r})"
+            )
 
         # Build per-agent configs, applying any overrides
         if mode in {"single_long", "single_memory"}:
@@ -221,6 +250,9 @@ class ExperimentConfig:
                     agent_id="agent_0",
                     time_budget_minutes=budget,
                     train_time_budget_seconds=train_s,
+                    train_max_steps=_optional_int(
+                        single_agent_overrides.get("train_max_steps", train_max_steps)
+                    ),
                     cuda_device=devices[0],
                     model=single_agent_overrides.get("model", model),
                     temperature=single_agent_overrides.get("temperature", temp),
@@ -244,6 +276,7 @@ class ExperimentConfig:
                     agent_id=aid,
                     time_budget_minutes=int(ov.get("time_budget_minutes", budget)),
                     train_time_budget_seconds=int(ov.get("train_time_budget_seconds", train_s)),
+                    train_max_steps=_optional_int(ov.get("train_max_steps", train_max_steps)),
                     cuda_device=str(ov.get("cuda_device", devices[i])),
                     model=ov.get("model", model),
                     temperature=ov.get("temperature", temp),
@@ -260,6 +293,12 @@ class ExperimentConfig:
             mode=mode,
             base_time_budget_minutes=budget,
             train_time_budget_seconds=train_s,
+            train_max_steps=train_max_steps,
+            evaluator_concurrency=evaluator_concurrency,
+            target_val_bpb=_optional_float(eval_.get("target_val_bpb")),
+            success_confidence=float(eval_.get("success_confidence", 0.80)),
+            llm_token_price=float(eval_.get("llm_token_price", 1.0)),
+            evaluator_hour_price=float(eval_.get("evaluator_hour_price", 0.0)),
             repo_root=repo_root,
             agents=agent_list,
             slurm_enabled=bool(slurm.get("enabled", True)),
@@ -269,3 +308,15 @@ class ExperimentConfig:
             system_prompt_file=tmpl.get("system_prompt", "templates/agent_system_prompt.md"),
             first_message_file=tmpl.get("first_message", "templates/agent_first_message.md"),
         )
+
+
+def _optional_int(value) -> Optional[int]:
+    if value in (None, "", "null"):
+        return None
+    return int(value)
+
+
+def _optional_float(value) -> Optional[float]:
+    if value in (None, "", "null"):
+        return None
+    return float(value)

@@ -22,7 +22,9 @@ Then initialize `results/results.tsv` with just the header row.
 
 Session parameters:
 - Time budget: {{TIME_BUDGET}} minutes
-- Training time per run: ~{{TRAIN_TIME_BUDGET_MIN}} min ({{TRAIN_TIME_BUDGET}}s + ~120s compile/eval)
+- Evaluator budget: {{EVALUATOR_BUDGET_DESCRIPTION}}
+- Evaluator concurrency: {{EVALUATOR_CONCURRENCY}}
+- Pre-registered success threshold q*: {{TARGET_VAL_BPB}}
 - Environment vars: RUN_ID={{RUN_ID}} AGENT_ID={{AGENT_ID}}
 
 WORKFLOW — follow this exactly:
@@ -57,6 +59,3 @@ Do NOT pause to ask the human if you should continue.
 After the baseline is logged, stop and wait for the next controller turn.
 
 Start now.
-
-
-IMPORTANT PRIOR KNOWLEDGE: In previous experiments on this exact task, the single most productive change was increasing LEARNING_RATE from 1e-3 to 1.5e-3. This produced the best result ever (val_bpb=0.906). Start with that change, then explore further. Avoid large LR jumps (>3e-3) — they consistently make things worse.

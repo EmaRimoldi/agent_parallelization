@@ -294,6 +294,8 @@ echo "$JOB_ID"
 def generate_run_on_worker_sh(
     workspace: Path,
     train_budget_seconds: int = 600,
+    train_max_steps: int | None = None,
+    evaluator_lock_path: Path | None = None,
     use_slurm: bool = True,
 ) -> Path:
     """Write run_on_worker.sh into workspace.
@@ -304,13 +306,28 @@ def generate_run_on_worker_sh(
     Agent calls this once per iteration after modifying train.py:
         bash run_on_worker.sh
     """
+    lock_path = str(evaluator_lock_path) if evaluator_lock_path is not None else ""
+    max_steps_export = (
+        f"export AUTOSEARCH_MAX_STEPS={train_max_steps}\n"
+        if train_max_steps is not None
+        else "unset AUTOSEARCH_MAX_STEPS\n"
+    )
     if not use_slurm:
         path_additions = _path_additions()
         script = f"""#!/bin/bash
 # CPU mode - run training directly
 export PATH="{path_additions}:$PATH"
 export AUTOSEARCH_TIME_BUDGET={train_budget_seconds}
+{max_steps_export.rstrip()}
+EVALUATOR_LOCK_PATH="{lock_path}"
 cd "{workspace}"
+if [ -n "$EVALUATOR_LOCK_PATH" ]; then
+  mkdir -p "$(dirname "$EVALUATOR_LOCK_PATH")"
+  exec 9>"$EVALUATOR_LOCK_PATH"
+  echo "Waiting for serialized evaluator lock: $EVALUATOR_LOCK_PATH" >&2
+  flock 9
+  echo "Acquired serialized evaluator lock." >&2
+fi
 rm -f run.result run.trigger
 touch run.trigger
 mkdir -p logs
@@ -349,11 +366,20 @@ fi
 # and block until the result is available.
 WORKSPACE_PATH="{workspace}"
 TIMEOUT={timeout}
+EVALUATOR_LOCK_PATH="{lock_path}"
 
 # Fail fast if no worker job is running
 if ! squeue -u "$USER" -n "worker_*" -h -o "%i" 2>/dev/null | grep -q .; then
   echo "TRAINING FAILED: no GPU worker running — call start_gpu_worker.sh first"
   exit 1
+fi
+
+if [ -n "$EVALUATOR_LOCK_PATH" ]; then
+  mkdir -p "$(dirname "$EVALUATOR_LOCK_PATH")"
+  exec 9>"$EVALUATOR_LOCK_PATH"
+  echo "Waiting for serialized evaluator lock: $EVALUATOR_LOCK_PATH" >&2
+  flock 9
+  echo "Acquired serialized evaluator lock." >&2
 fi
 
 rm -f "$WORKSPACE_PATH/run.result"

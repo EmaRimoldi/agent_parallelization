@@ -18,6 +18,8 @@ run-parallel-shared = "agent_parallelization_new.launcher:main_parallel_shared"
 run-single-long = "agent_parallelization_new.launcher:main_single_long"
 run-single-memory = "agent_parallelization_new.launcher:main_single_memory"
 run-imported-swarm = "agent_parallelization_new.imported_swarms.launcher:main_imported_swarm"
+analyze-certified-time = "agent_parallelization_new.certified_time:main"
+calibrate-baseline-headroom = "agent_parallelization_new.baseline_calibration:main"
 
 [build-system]
 requires = ["hatchling"]

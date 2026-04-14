@@ -245,6 +245,7 @@ class Orchestrator:
             workspace_path=workspace,
             branch_name=branch_name,
             train_budget_seconds=agent_config.train_time_budget_seconds,
+            train_max_steps=agent_config.train_max_steps,
             run_id=run_id,
             agent_id=agent_config.agent_id,
             results_root=results_root,
@@ -254,6 +255,11 @@ class Orchestrator:
             use_slurm=self.config.slurm_enabled,
             agent_time_budget_minutes=agent_config.time_budget_minutes,
             experiment_mode=self.config.mode,
+            evaluator_lock_path=(
+                mode_dir.parent / "evaluator.lock"
+                if self.config.evaluator_concurrency == "serialized"
+                else None
+            ),
         )
         (agent_dir / "logs").mkdir(parents=True, exist_ok=True)
         return agent_dir, workspace
@@ -493,6 +499,8 @@ class Orchestrator:
         return messages
 
     def _validate_gpu_assignments(self) -> None:
+        if self.config.evaluator_concurrency == "serialized":
+            return
         devices = [a.cuda_device for a in self.config.agents]
         if len(devices) != len(set(devices)):
             raise ValueError(

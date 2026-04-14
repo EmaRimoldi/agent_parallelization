@@ -31,6 +31,7 @@ def create_workspace(
     run_id: str,
     agent_id: str,
     results_root: Path,
+    train_max_steps: Optional[int] = None,
     slurm_partition: str = "pi_tpoggio",
     slurm_gres: str = "gpu:1",
     slurm_time: str = "00:08:00",
@@ -38,6 +39,7 @@ def create_workspace(
     persistent_worker: bool = True,
     agent_time_budget_minutes: int = 60,
     experiment_mode: str = "parallel",
+    evaluator_lock_path: Optional[Path] = None,
 ) -> Path:
     """Create an isolated git-backed workspace for one agent.
 
@@ -87,6 +89,8 @@ def create_workspace(
             generate_run_on_worker_sh(
                 workspace_path,
                 train_budget_seconds,
+                train_max_steps=train_max_steps,
+                evaluator_lock_path=evaluator_lock_path,
                 use_slurm=True,
             )
             generate_stop_gpu_worker_sh(workspace_path, use_slurm=True)
@@ -100,6 +104,8 @@ def create_workspace(
             generate_run_on_worker_sh(
                 workspace_path,
                 train_budget_seconds,
+                train_max_steps=train_max_steps,
+                evaluator_lock_path=evaluator_lock_path,
                 use_slurm=False,
             )
             generate_stop_gpu_worker_sh(workspace_path, use_slurm=False)
