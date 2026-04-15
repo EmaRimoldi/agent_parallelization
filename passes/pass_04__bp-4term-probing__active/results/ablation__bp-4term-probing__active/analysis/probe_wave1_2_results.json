@@ -1,0 +1,523 @@
+{
+  "P01": {
+    "n_runs": 7,
+    "n_non_baseline": 5,
+    "n_agents": 2,
+    "n_categories": 3,
+    "categories": {
+      "regularization": 1,
+      "other": 2,
+      "optimization": 2
+    },
+    "entropy": 1.5219280948873621,
+    "jaccard": 0.3333333333333333,
+    "switch_rate": 0.6,
+    "switch_count": 3,
+    "switch_total": 5,
+    "improvements": 1,
+    "best_bpb": 0.922538,
+    "worst_bpb": 1.064195,
+    "mean_train_seconds": 311.25714285714287,
+    "agent_data": {
+      "agent_0": {
+        "n_runs": 4,
+        "n_non_baseline": 3,
+        "categories": [
+          "other",
+          "optimization"
+        ],
+        "cat_sequence": [
+          "other",
+          "optimization",
+          "optimization"
+        ]
+      },
+      "agent_1": {
+        "n_runs": 3,
+        "n_non_baseline": 2,
+        "categories": [
+          "regularization",
+          "other"
+        ],
+        "cat_sequence": [
+          "regularization",
+          "other"
+        ]
+      }
+    }
+  },
+  "P02": {
+    "n_runs": 14,
+    "n_non_baseline": 12,
+    "n_agents": 2,
+    "n_categories": 3,
+    "categories": {
+      "other": 4,
+      "regularization": 2,
+      "optimization": 6
+    },
+    "entropy": 1.4591479170272448,
+    "jaccard": 1.0,
+    "switch_rate": 0.5,
+    "switch_count": 6,
+    "switch_total": 12,
+    "improvements": 0,
+    "best_bpb": 0.979568,
+    "worst_bpb": 1.314253,
+    "mean_train_seconds": 60.06428571428571,
+    "agent_data": {
+      "agent_0": {
+        "n_runs": 7,
+        "n_non_baseline": 6,
+        "categories": [
+          "regularization",
+          "other",
+          "optimization"
+        ],
+        "cat_sequence": [
+          "optimization",
+          "optimization",
+          "other",
+          "optimization",
+          "regularization",
+          "other"
+        ]
+      },
+      "agent_1": {
+        "n_runs": 7,
+        "n_non_baseline": 6,
+        "categories": [
+          "regularization",
+          "other",
+          "optimization"
+        ],
+        "cat_sequence": [
+          "other",
+          "other",
+          "regularization",
+          "optimization",
+          "optimization",
+          "optimization"
+        ]
+      }
+    }
+  },
+  "P03": {
+    "n_runs": 8,
+    "n_non_baseline": 7,
+    "n_agents": 1,
+    "n_categories": 1,
+    "categories": {
+      "regularization": 7
+    },
+    "entropy": -0.0,
+    "jaccard": null,
+    "switch_rate": 0.14285714285714285,
+    "switch_count": 1,
+    "switch_total": 7,
+    "improvements": 0,
+    "best_bpb": 0.935578,
+    "worst_bpb": 1.222648,
+    "mean_train_seconds": 60.0375,
+    "agent_data": {
+      "agent_0": {
+        "n_runs": 8,
+        "n_non_baseline": 7,
+        "categories": [
+          "regularization"
+        ],
+        "cat_sequence": [
+          "regularization",
+          "regularization",
+          "regularization",
+          "regularization",
+          "regularization",
+          "regularization",
+          "regularization"
+        ]
+      }
+    }
+  },
+  "P04": {
+    "n_runs": 10,
+    "n_non_baseline": 9,
+    "n_agents": 1,
+    "n_categories": 3,
+    "categories": {
+      "other": 5,
+      "regularization": 1,
+      "optimization": 3
+    },
+    "entropy": 1.3516441151533924,
+    "jaccard": null,
+    "switch_rate": 0.5555555555555556,
+    "switch_count": 5,
+    "switch_total": 9,
+    "improvements": 0,
+    "best_bpb": 1.103296,
+    "worst_bpb": 1.87917,
+    "mean_train_seconds": 30.090000000000003,
+    "agent_data": {
+      "agent_0": {
+        "n_runs": 10,
+        "n_non_baseline": 9,
+        "categories": [
+          "regularization",
+          "other",
+          "optimization"
+        ],
+        "cat_sequence": [
+          "other",
+          "other",
+          "regularization",
+          "other",
+          "optimization",
+          "other",
+          "other",
+          "optimization",
+          "optimization"
+        ]
+      }
+    }
+  },
+  "P05": {
+    "n_runs": 7,
+    "n_non_baseline": 6,
+    "n_agents": 1,
+    "n_categories": 3,
+    "categories": {
+      "optimization": 3,
+      "other": 2,
+      "regularization": 1
+    },
+    "entropy": 1.4591479170272448,
+    "jaccard": null,
+    "switch_rate": 0.6666666666666666,
+    "switch_count": 4,
+    "switch_total": 6,
+    "improvements": 1,
+    "best_bpb": 0.919108,
+    "worst_bpb": 1.267033,
+    "mean_train_seconds": 60.028571428571425,
+    "agent_data": {
+      "agent_0": {
+        "n_runs": 7,
+        "n_non_baseline": 6,
+        "categories": [
+          "regularization",
+          "other",
+          "optimization"
+        ],
+        "cat_sequence": [
+          "optimization",
+          "optimization",
+          "optimization",
+          "other",
+          "regularization",
+          "other"
+        ]
+      }
+    }
+  },
+  "P06": {
+    "n_runs": 10,
+    "n_non_baseline": 8,
+    "n_agents": 2,
+    "n_categories": 3,
+    "categories": {
+      "optimization": 6,
+      "regularization": 1,
+      "data_pipeline": 1
+    },
+    "entropy": 1.061278124459133,
+    "jaccard": 0.3333333333333333,
+    "switch_rate": 0.625,
+    "switch_count": 5,
+    "switch_total": 8,
+    "improvements": 0,
+    "best_bpb": 0.948354,
+    "worst_bpb": 1.250407,
+    "mean_train_seconds": 60.06,
+    "agent_data": {
+      "agent_0": {
+        "n_runs": 7,
+        "n_non_baseline": 6,
+        "categories": [
+          "regularization",
+          "data_pipeline",
+          "optimization"
+        ],
+        "cat_sequence": [
+          "optimization",
+          "optimization",
+          "regularization",
+          "optimization",
+          "optimization",
+          "data_pipeline"
+        ]
+      },
+      "agent_1": {
+        "n_runs": 3,
+        "n_non_baseline": 2,
+        "categories": [
+          "optimization"
+        ],
+        "cat_sequence": [
+          "optimization",
+          "optimization"
+        ]
+      }
+    }
+  },
+  "P07": {
+    "n_runs": 18,
+    "n_non_baseline": 16,
+    "n_agents": 2,
+    "n_categories": 3,
+    "categories": {
+      "optimization": 8,
+      "regularization": 5,
+      "other": 3
+    },
+    "entropy": 1.4772170014624826,
+    "jaccard": 0.6666666666666666,
+    "switch_rate": 0.875,
+    "switch_count": 14,
+    "switch_total": 16,
+    "improvements": 1,
+    "best_bpb": 0.906257,
+    "worst_bpb": 1.245813,
+    "mean_train_seconds": 60.044444444444444,
+    "agent_data": {
+      "agent_0": {
+        "n_runs": 3,
+        "n_non_baseline": 2,
+        "categories": [
+          "regularization",
+          "other"
+        ],
+        "cat_sequence": [
+          "regularization",
+          "other"
+        ]
+      },
+      "agent_1": {
+        "n_runs": 15,
+        "n_non_baseline": 14,
+        "categories": [
+          "regularization",
+          "other",
+          "optimization"
+        ],
+        "cat_sequence": [
+          "optimization",
+          "optimization",
+          "regularization",
+          "optimization",
+          "regularization",
+          "optimization",
+          "other",
+          "optimization",
+          "regularization",
+          "optimization",
+          "regularization",
+          "other",
+          "optimization",
+          "optimization"
+        ]
+      }
+    }
+  },
+  "P08": {
+    "n_runs": 14,
+    "n_non_baseline": 13,
+    "n_agents": 1,
+    "n_categories": 4,
+    "categories": {
+      "other": 5,
+      "optimization": 3,
+      "regularization": 4,
+      "architecture": 1
+    },
+    "entropy": 1.8262452584026092,
+    "jaccard": null,
+    "switch_rate": 0.7692307692307693,
+    "switch_count": 10,
+    "switch_total": 13,
+    "improvements": 0,
+    "best_bpb": 0.981923,
+    "worst_bpb": 1.548404,
+    "mean_train_seconds": 60.142857142857146,
+    "agent_data": {
+      "agent_0": {
+        "n_runs": 14,
+        "n_non_baseline": 13,
+        "categories": [
+          "architecture",
+          "regularization",
+          "other",
+          "optimization"
+        ],
+        "cat_sequence": [
+          "other",
+          "other",
+          "optimization",
+          "regularization",
+          "other",
+          "regularization",
+          "optimization",
+          "other",
+          "optimization",
+          "architecture",
+          "other",
+          "regularization",
+          "regularization"
+        ]
+      }
+    }
+  },
+  "P09": {
+    "n_runs": 29,
+    "n_non_baseline": 27,
+    "n_agents": 2,
+    "n_categories": 5,
+    "categories": {
+      "data_pipeline": 1,
+      "optimization": 12,
+      "regularization": 4,
+      "other": 7,
+      "architecture": 3
+    },
+    "entropy": 1.9613348367849288,
+    "jaccard": 0.8,
+    "switch_rate": 0.7777777777777778,
+    "switch_count": 21,
+    "switch_total": 27,
+    "improvements": 0,
+    "best_bpb": 0.971015,
+    "worst_bpb": 1.471516,
+    "mean_train_seconds": 60.11034482758621,
+    "agent_data": {
+      "agent_0": {
+        "n_runs": 14,
+        "n_non_baseline": 13,
+        "categories": [
+          "architecture",
+          "regularization",
+          "other",
+          "optimization"
+        ],
+        "cat_sequence": [
+          "optimization",
+          "other",
+          "architecture",
+          "optimization",
+          "regularization",
+          "other",
+          "other",
+          "other",
+          "optimization",
+          "optimization",
+          "architecture",
+          "optimization",
+          "regularization"
+        ]
+      },
+      "agent_1": {
+        "n_runs": 15,
+        "n_non_baseline": 14,
+        "categories": [
+          "other",
+          "regularization",
+          "data_pipeline",
+          "optimization",
+          "architecture"
+        ],
+        "cat_sequence": [
+          "data_pipeline",
+          "optimization",
+          "regularization",
+          "other",
+          "optimization",
+          "optimization",
+          "optimization",
+          "other",
+          "optimization",
+          "architecture",
+          "optimization",
+          "optimization",
+          "other",
+          "regularization"
+        ]
+      }
+    }
+  },
+  "P10": {
+    "n_runs": 14,
+    "n_non_baseline": 12,
+    "n_agents": 2,
+    "n_categories": 3,
+    "categories": {
+      "other": 4,
+      "optimization": 5,
+      "regularization": 3
+    },
+    "entropy": 1.5545851693377994,
+    "jaccard": 1.0,
+    "switch_rate": 0.75,
+    "switch_count": 9,
+    "switch_total": 12,
+    "improvements": 0,
+    "best_bpb": 0.959791,
+    "worst_bpb": 1.241214,
+    "mean_train_seconds": 60.06428571428571,
+    "agent_data": {
+      "agent_0": {
+        "n_runs": 7,
+        "n_non_baseline": 6,
+        "categories": [
+          "regularization",
+          "other",
+          "optimization"
+        ],
+        "cat_sequence": [
+          "optimization",
+          "optimization",
+          "regularization",
+          "other",
+          "optimization",
+          "other"
+        ]
+      },
+      "agent_1": {
+        "n_runs": 7,
+        "n_non_baseline": 6,
+        "categories": [
+          "regularization",
+          "other",
+          "optimization"
+        ],
+        "cat_sequence": [
+          "other",
+          "optimization",
+          "other",
+          "optimization",
+          "regularization",
+          "regularization"
+        ]
+      }
+    }
+  },
+  "P11": {
+    "n_runs": 0
+  },
+  "P12": {
+    "n_runs": 0
+  },
+  "P13": {
+    "n_runs": 0
+  },
+  "P14": {
+    "n_runs": 0
+  }
+}

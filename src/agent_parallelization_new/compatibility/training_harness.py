@@ -184,6 +184,7 @@ def generate_start_gpu_worker_sh(
     slurm_partition: str = "pi_tpoggio",
     slurm_gres: str = "gpu:1",
     worker_time: str = "01:00:00",
+    use_slurm: bool = True,
 ) -> Path:
     """Write start_gpu_worker.sh into workspace.
 
@@ -198,6 +199,21 @@ def generate_start_gpu_worker_sh(
         WORKER_JOB=$(bash start_gpu_worker.sh)
     """
     path_additions = _path_additions()
+
+    if not use_slurm:
+        script = f"""#!/bin/bash
+# CPU mode - no GPU allocation needed
+export PATH="{path_additions}:$PATH"
+cd "{workspace}"
+rm -f stop_worker run.trigger run.result
+echo "cpu_worker_$$"
+date -Iseconds > gpu_allocated_at
+"""
+        out = workspace / "start_gpu_worker.sh"
+        out.write_text(script)
+        out.chmod(out.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        return out
+
     uv_bin = _find_bin("uv")
 
     # Write the worker loop as a separate file so all shell variables are
@@ -278,6 +294,9 @@ echo "$JOB_ID"
 def generate_run_on_worker_sh(
     workspace: Path,
     train_budget_seconds: int = 600,
+    train_max_steps: int | None = None,
+    evaluator_lock_path: Path | None = None,
+    use_slurm: bool = True,
 ) -> Path:
     """Write run_on_worker.sh into workspace.
 
@@ -287,6 +306,58 @@ def generate_run_on_worker_sh(
     Agent calls this once per iteration after modifying train.py:
         bash run_on_worker.sh
     """
+    lock_path = str(evaluator_lock_path) if evaluator_lock_path is not None else ""
+    max_steps_export = (
+        f"export AUTOSEARCH_MAX_STEPS={train_max_steps}\n"
+        if train_max_steps is not None
+        else "unset AUTOSEARCH_MAX_STEPS\n"
+    )
+    if not use_slurm:
+        path_additions = _path_additions()
+        script = f"""#!/bin/bash
+# CPU mode - run training directly
+export PATH="{path_additions}:$PATH"
+export AUTOSEARCH_TIME_BUDGET={train_budget_seconds}
+{max_steps_export.rstrip()}
+EVALUATOR_LOCK_PATH="{lock_path}"
+cd "{workspace}"
+if [ -n "$EVALUATOR_LOCK_PATH" ]; then
+  mkdir -p "$(dirname "$EVALUATOR_LOCK_PATH")"
+  exec 9>"$EVALUATOR_LOCK_PATH"
+  echo "Waiting for serialized evaluator lock: $EVALUATOR_LOCK_PATH" >&2
+  flock 9
+  echo "Acquired serialized evaluator lock." >&2
+fi
+rm -f run.result run.trigger
+touch run.trigger
+mkdir -p logs
+RUN_COUNT=$(find logs -maxdepth 1 -name 'train_run_*.out' 2>/dev/null | wc -l | tr -d ' ')
+RUN_COUNT=$((RUN_COUNT + 1))
+RUN_LOG=$(printf 'logs/train_run_%03d.out' "$RUN_COUNT")
+python train.py > "$RUN_LOG" 2>&1
+cp "$RUN_LOG" logs/train_current.out
+VAL=$(grep 'val_bpb:' logs/train_current.out | head -1 | awk '{{print $2}}') || VAL=""
+VRAM="0.0"
+if [ -n "$VAL" ]; then
+    echo "TRAINING DONE" > run.result
+    echo "val_bpb: $VAL" >> run.result
+    echo "peak_vram_mb: 0.0" >> run.result
+    rm -f run.trigger
+    echo "TRAINING DONE"
+    echo "val_bpb: $VAL"
+    echo "peak_vram_mb: 0.0"
+else
+    ERRMSG=$(tail -5 logs/train_current.out | tr '\\n' ' ')
+    echo "TRAINING FAILED: $ERRMSG" > run.result
+    rm -f run.trigger
+    echo "TRAINING FAILED: $ERRMSG"
+fi
+"""
+        out = workspace / "run_on_worker.sh"
+        out.write_text(script)
+        out.chmod(out.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        return out
+
     # Give a 20 % margin over the training budget before declaring timeout
     timeout = int(train_budget_seconds * 1.2) + 30
 
@@ -295,11 +366,20 @@ def generate_run_on_worker_sh(
 # and block until the result is available.
 WORKSPACE_PATH="{workspace}"
 TIMEOUT={timeout}
+EVALUATOR_LOCK_PATH="{lock_path}"
 
 # Fail fast if no worker job is running
 if ! squeue -u "$USER" -n "worker_*" -h -o "%i" 2>/dev/null | grep -q .; then
   echo "TRAINING FAILED: no GPU worker running — call start_gpu_worker.sh first"
   exit 1
+fi
+
+if [ -n "$EVALUATOR_LOCK_PATH" ]; then
+  mkdir -p "$(dirname "$EVALUATOR_LOCK_PATH")"
+  exec 9>"$EVALUATOR_LOCK_PATH"
+  echo "Waiting for serialized evaluator lock: $EVALUATOR_LOCK_PATH" >&2
+  flock 9
+  echo "Acquired serialized evaluator lock." >&2
 fi
 
 rm -f "$WORKSPACE_PATH/run.result"
@@ -334,13 +414,24 @@ exit 1
     return out
 
 
-def generate_stop_gpu_worker_sh(workspace: Path) -> Path:
+def generate_stop_gpu_worker_sh(workspace: Path, use_slurm: bool = True) -> Path:
     """Write stop_gpu_worker.sh into workspace.
 
     Signals the worker loop to exit cleanly, then cancels the SLURM job.
     Agent calls this at the very end of its loop:
         bash stop_gpu_worker.sh $WORKER_JOB_ID
     """
+    if not use_slurm:
+        script = f"""#!/bin/bash
+# CPU mode - nothing to release
+cd "{workspace}"
+echo "CPU worker stopped"
+"""
+        out = workspace / "stop_gpu_worker.sh"
+        out.write_text(script)
+        out.chmod(out.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        return out
+
     script = f"""#!/bin/bash
 # stop_gpu_worker.sh — gracefully shut down the persistent GPU worker
 WORKSPACE_PATH="{workspace}"

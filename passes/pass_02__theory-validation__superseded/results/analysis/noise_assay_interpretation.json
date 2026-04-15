@@ -1,0 +1,18 @@
+{
+  "baseline_mean": 0.8246086,
+  "best_d10_mean": 0.8694396,
+  "mean_difference_best_minus_baseline": 0.044830999999999954,
+  "baseline_std_population": 0.03587057448996323,
+  "best_d10_std_population": 0.05013905194795769,
+  "baseline_range": 0.09304200000000007,
+  "best_d10_range": 0.11980899999999994,
+  "pilot_reported_best_d10": 0.755384,
+  "replication_gap_vs_pilot_best_mean": 0.11405559999999992,
+  "welch_t_statistic": -1.4543905573057851,
+  "welch_p_value": 0.18775065775183733,
+  "interpretation": {
+    "single_eval_is_unreliable_for_selection": true,
+    "pilot_best_commit_failed_to_replicate": true,
+    "noise_magnitude_is_same_order_as_pilot_cell_gaps": true
+  }
+}

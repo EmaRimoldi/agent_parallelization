@@ -1,0 +1,50 @@
+[
+  {
+    "probe_id": "P07",
+    "experiment_id": "probe_P07",
+    "name": "shared_extended",
+    "description": "Shared memory + diverse, 30 min (best Wave 1 improvement rate)",
+    "variable": "extended budget for shared+diverse",
+    "status": "ok",
+    "returncode": 0,
+    "elapsed_seconds": 1794.5,
+    "n_runs": 18,
+    "best_val_bpb": 0.906257
+  },
+  {
+    "probe_id": "P08",
+    "experiment_id": "probe_P08",
+    "name": "memory_extended",
+    "description": "Single + memory, 30 min (test memory degradation curve)",
+    "variable": "extended budget for memory",
+    "status": "ok",
+    "returncode": 0,
+    "elapsed_seconds": 1794.5,
+    "n_runs": 14,
+    "best_val_bpb": 0.981923
+  },
+  {
+    "probe_id": "P09",
+    "experiment_id": "probe_P09",
+    "name": "diverse_extended",
+    "description": "Parallel diverse, 30 min (test diversity compounding)",
+    "variable": "extended budget for diversity",
+    "status": "ok",
+    "returncode": 0,
+    "elapsed_seconds": 1804.5,
+    "n_runs": 29,
+    "best_val_bpb": 0.971015
+  },
+  {
+    "probe_id": "P10",
+    "experiment_id": "probe_P10",
+    "name": "homo_fixed",
+    "description": "Parallel homogeneous, 60s training (comparable P01 control)",
+    "variable": "P01 control with fixed template",
+    "status": "ok",
+    "returncode": 0,
+    "elapsed_seconds": 904.0,
+    "n_runs": 14,
+    "best_val_bpb": 0.959791
+  }
+]

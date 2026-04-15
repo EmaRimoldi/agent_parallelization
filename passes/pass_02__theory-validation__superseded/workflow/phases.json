@@ -1,0 +1,128 @@
+{
+  "00_overview": {
+    "title": "Overview and Workspace Setup",
+    "type": "setup",
+    "file": "00_overview.md",
+    "next": "01_deterministic_eval",
+    "description": "Review the strategy, verify prerequisites, initialize workspace."
+  },
+  "01_deterministic_eval": {
+    "title": "Make Evaluation Deterministic",
+    "type": "code_change",
+    "file": "01_deterministic_eval.md",
+    "next": "01a_verify_determinism",
+    "description": "Fix all random seeds in prepare.py and train.py to eliminate evaluation noise."
+  },
+  "01a_verify_determinism": {
+    "title": "Verify Deterministic Evaluation",
+    "type": "script",
+    "file": "01a_verify_determinism.md",
+    "script": "scripts/verify_determinism.py",
+    "branches": {
+      "pass": "02_power_calibration",
+      "fail": "01b_debug_determinism"
+    },
+    "on_fail": "01b_debug_determinism",
+    "description": "Run the same train.py 5 times, verify identical val_bpb."
+  },
+  "01b_debug_determinism": {
+    "title": "Debug Non-Determinism Sources",
+    "type": "code_change",
+    "file": "01b_debug_determinism.md",
+    "next": "01a_verify_determinism",
+    "description": "Identify and fix remaining sources of non-determinism."
+  },
+  "02_power_calibration": {
+    "title": "Power Calibration: d00 vs d10",
+    "type": "experiment",
+    "file": "02_power_calibration.md",
+    "next": "02a_analyze_calibration",
+    "description": "Run d00 and d10 with deterministic eval, 5 replicates each, 45-min budget."
+  },
+  "02a_analyze_calibration": {
+    "title": "Analyze Calibration Results",
+    "type": "analysis",
+    "file": "02a_analyze_calibration.md",
+    "next": "02b_decision_gate",
+    "description": "Compute effect sizes, mode counts, cost variance from calibration data."
+  },
+  "02b_decision_gate": {
+    "title": "Decision Gate: Proceed, Extend, or Escalate",
+    "type": "decision",
+    "file": "02b_decision_gate.md",
+    "branches": {
+      "proceed": "03_full_2x2_run",
+      "extend_budget": "02c_extended_calibration",
+      "escalate_cifar100": "04_escalation_cifar100",
+      "structured_search": "05_structured_search"
+    },
+    "description": "Evaluate calibration: Cohen's d, mode diversity, and decide path forward."
+  },
+  "02c_extended_calibration": {
+    "title": "Extended Calibration: Longer Budget",
+    "type": "experiment",
+    "file": "02_power_calibration.md",
+    "next": "02a_analyze_calibration",
+    "description": "Re-run calibration with 60-min agent budget for more training attempts."
+  },
+  "03_full_2x2_run": {
+    "title": "Full 2x2 Experiment",
+    "type": "experiment",
+    "file": "03_full_2x2_run.md",
+    "next": "03a_mode_labeling",
+    "description": "Run all 4 cells with deterministic eval, 5 replicates, 60-min budget."
+  },
+  "03a_mode_labeling": {
+    "title": "Mode Labeling Upgrade and Execution",
+    "type": "code_change",
+    "file": "03a_mode_labeling.md",
+    "next": "03b_decomposition",
+    "description": "Upgrade label_modes.py to two-level labeling, apply to all runs."
+  },
+  "03b_decomposition": {
+    "title": "Compute Full Decomposition",
+    "type": "analysis",
+    "file": "03b_decomposition.md",
+    "next": "03c_identity_check",
+    "description": "Run corrected decomposition on all reps with upgraded mode labels."
+  },
+  "03c_identity_check": {
+    "title": "Verify Accounting Identity",
+    "type": "analysis",
+    "file": "03c_identity_check.md",
+    "branches": {
+      "identity_holds": "06_theorem_update",
+      "identity_fails_degenerate": "05_structured_search",
+      "identity_fails_remainder": "06_theorem_update"
+    },
+    "description": "Check if delta approx cost + phi + G - epsilon + R for each cell and axis."
+  },
+  "04_escalation_cifar100": {
+    "title": "Escalation: Switch to CIFAR-100",
+    "type": "code_change",
+    "file": "04_escalation_cifar100.md",
+    "next": "01_deterministic_eval",
+    "description": "Modify prepare.py to load CIFAR-100, re-enter the main pipeline."
+  },
+  "05_structured_search": {
+    "title": "Fallback: Structured Hyperparameter Search",
+    "type": "code_change",
+    "file": "05_structured_search.md",
+    "next": "03_full_2x2_run",
+    "description": "Replace free-form code editing with structured config search."
+  },
+  "06_theorem_update": {
+    "title": "Revise Theorem Based on Evidence",
+    "type": "analysis",
+    "file": "06_theorem_update.md",
+    "next": "07_final_report",
+    "description": "Update theorem statement, assumptions, and proof based on experimental findings."
+  },
+  "07_final_report": {
+    "title": "Generate Final Report",
+    "type": "report",
+    "file": "07_final_report.md",
+    "next": null,
+    "description": "Synthesize all evidence into a publication-ready report."
+  }
+}

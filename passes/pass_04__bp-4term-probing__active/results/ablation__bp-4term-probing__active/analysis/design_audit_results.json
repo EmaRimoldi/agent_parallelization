@@ -1,0 +1,170 @@
+{
+  "n_total_runs": 237,
+  "cell_summary": {
+    "d00": {
+      "n_runs": 47,
+      "n_reps": 5,
+      "mean_vbpb": 1.0025666170212766,
+      "best_vbpb": 0.824019,
+      "mean_best": 0.8905018,
+      "success_rate": 0.2619047619047619,
+      "mean_wall": 134.51402295903958,
+      "mean_train": 116.39361702127658
+    },
+    "d10": {
+      "n_runs": 69,
+      "n_reps": 5,
+      "mean_vbpb": 1.0127205652173914,
+      "best_vbpb": 0.87549,
+      "mean_best": 0.9151125999999999,
+      "success_rate": 0.1875,
+      "mean_wall": 83.10971616316533,
+      "mean_train": 73.22173913043478
+    },
+    "d01": {
+      "n_runs": 91,
+      "n_reps": 3,
+      "mean_vbpb": 1.066303131868132,
+      "best_vbpb": 0.91475,
+      "mean_best": 0.9204673333333334,
+      "success_rate": 0.07058823529411765,
+      "mean_wall": 126.85036036732433,
+      "mean_train": 113.63516483516483
+    },
+    "d11": {
+      "n_runs": 30,
+      "n_reps": 2,
+      "mean_vbpb": 1.0453198333333331,
+      "best_vbpb": 0.925845,
+      "mean_best": 0.925845,
+      "success_rate": 0.0,
+      "mean_wall": 222.42491009235383,
+      "mean_train": 267.8266666666666
+    }
+  },
+  "cpu_contention": {
+    "kruskal_wallis": {
+      "H": 56.25763602860127,
+      "p": 3.701383335566427e-12
+    },
+    "d00_vs_d01": {
+      "U": 1970.5,
+      "p": 0.4517214163489113,
+      "r": 0.06406116249869949
+    },
+    "d00_vs_d11": {
+      "U": 360.0,
+      "p": 0.0003200136172810222,
+      "r": 0.41009123149641746
+    },
+    "d10_vs_d01": {
+      "U": 1429.0,
+      "p": 3.8238193068817724e-09,
+      "r": 0.4657750241834671
+    },
+    "d10_vs_d11": {
+      "U": 269.0,
+      "p": 5.588302497482657e-09,
+      "r": 0.5857997249772108
+    },
+    "d00_vs_d10": {
+      "U": 2313.5,
+      "p": 0.00010068851461376803,
+      "r": 0.36107778053651046
+    },
+    "d01_vs_d11": {
+      "U": 734.0,
+      "p": 0.00015391033902022955,
+      "r": 0.3440612515222102
+    },
+    "overhead_ratio": 1.5047106325706594
+  },
+  "agent_homogeneity": {
+    "d01_rep1_jaccard": 0.8,
+    "d01_rep1_kw_jaccard": 0.5,
+    "d01_rep2_jaccard": 1.0,
+    "d01_rep2_kw_jaccard": 0.2727272727272727,
+    "d01_rep3_jaccard": 0.75,
+    "d01_rep3_kw_jaccard": 0.5555555555555556,
+    "d11_rep1_jaccard": 0.75,
+    "d11_rep1_kw_jaccard": 0.6,
+    "d11_rep2_jaccard": 0.0,
+    "d11_rep2_kw_jaccard": 0.4,
+    "d00_n_categories": 5,
+    "d00_entropy": 1.9386388580989358,
+    "d10_n_categories": 5,
+    "d10_entropy": 2.0109794389950686,
+    "d01_n_categories": 5,
+    "d01_entropy": 1.8674317663224627,
+    "d11_n_categories": 4,
+    "d11_entropy": 1.8702932210074805
+  },
+  "memory_anchoring": {
+    "d00_chi2_shift": {
+      "chi2": 5.772243909005248,
+      "p": 0.21681513065724795
+    },
+    "d10_chi2_shift": {
+      "chi2": 4.628527983366693,
+      "p": 0.3275782188234979
+    },
+    "d01_chi2_shift": {
+      "chi2": 4.235091133611045,
+      "p": 0.37512365830728533
+    },
+    "d11_chi2_shift": {
+      "chi2": 3.7,
+      "p": 0.29573403237527585
+    },
+    "d10_mem_corr": {
+      "r": -0.23118683860599717,
+      "p": 0.06605808987240948
+    },
+    "d11_mem_corr": {
+      "r": NaN,
+      "p": NaN
+    },
+    "d00_mean_streak": 2.4,
+    "d10_mean_streak": 4.2,
+    "d01_mean_streak": 3.1666666666666665,
+    "d11_mean_streak": 2.5
+  },
+  "task_ceiling": {
+    "n_improvements": 29,
+    "n_degradations": 179,
+    "improvement_rate": 0.12236286919831224,
+    "winrate_architecture": 0.2727272727272727,
+    "winrate_data_pipeline": 0.25,
+    "winrate_optimization": 0.047619047619047616,
+    "winrate_other": 0.3157894736842105,
+    "winrate_regularization": 0.0
+  },
+  "budget_sufficiency": {
+    "d00_mean_first_imp": 10.333333333333334,
+    "d00_reps_with_improvement": 3,
+    "d00_reps_without_improvement": 2,
+    "d10_mean_first_imp": 10.5,
+    "d10_reps_with_improvement": 2,
+    "d10_reps_without_improvement": 3,
+    "d01_mean_first_imp": 6.0,
+    "d01_reps_with_improvement": 2,
+    "d01_reps_without_improvement": 1,
+    "d11_reps_without_improvement": 2,
+    "d00_mean_runs_per_agent": 9.4,
+    "d10_mean_runs_per_agent": 13.8,
+    "d01_mean_runs_per_agent": 15.166666666666666,
+    "d11_mean_runs_per_agent": 7.5,
+    "session_length_corr": {
+      "r": 0.3876227111984943,
+      "p": 0.15342066688548844
+    }
+  },
+  "factorial": {
+    "memory_effect": 0.014994233333333273,
+    "parallel_effect": 0.020348966666666746,
+    "interaction": -0.01923313333333332,
+    "cohens_d_memory": 0.5205082904164137,
+    "cohens_d_parallelism": 0.6346035554908523,
+    "interaction_perm_p": 0.6211
+  }
+}

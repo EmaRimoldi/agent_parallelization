@@ -27,7 +27,9 @@ def run_parallel_experiment(
 
     Total compute = N×T. Wall-clock time ≈ T.
     """
-    assert config.mode == "parallel", f"Expected mode=parallel, got {config.mode}"
+    assert config.mode in {"parallel", "parallel_shared"}, (
+        f"Expected mode=parallel or parallel_shared, got {config.mode}"
+    )
     assert len(config.agents) >= 1, f"Parallel mode expects at least 1 agent, got {len(config.agents)}"
 
     orchestrator = Orchestrator(config=config, repo_root=repo_root)
@@ -42,11 +44,11 @@ def run_parallel_experiment(
     summary = collect_experiment(
         experiment_dir=experiment_dir,
         experiment_id=config.experiment_id,
-        mode="parallel",
+        mode=config.mode,
         agent_ids=agent_ids,
     )
 
-    mode_dir = experiment_dir / "mode_parallel"
+    mode_dir = experiment_dir / f"mode_{config.mode}"
     write_experiment_report(summary, mode_dir)
 
     return summary

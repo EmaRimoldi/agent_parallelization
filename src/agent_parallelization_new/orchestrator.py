@@ -18,6 +18,7 @@ Must NOT:
 from __future__ import annotations
 
 import atexit
+import csv
 import json
 import signal
 import subprocess
@@ -103,7 +104,7 @@ class Orchestrator:
     ) -> None:
         """Launch all agents simultaneously. Block until all finish or budgets expire."""
         self._validate_gpu_assignments()
-        mode_dir = experiment_dir / "mode_parallel"
+        mode_dir = experiment_dir / f"mode_{self.config.mode}"
         run_id = self.config.experiment_id
 
         # Write experiment manifest
@@ -158,7 +159,7 @@ class Orchestrator:
         first_message_template: str,
     ) -> None:
         """Launch one agent with double budget."""
-        mode_dir = experiment_dir / "mode_single_long"
+        mode_dir = experiment_dir / f"mode_{self.config.mode}"
         run_id = self.config.experiment_id
 
         manifest_path = experiment_dir / "config.json"
@@ -194,7 +195,7 @@ class Orchestrator:
         print(f"[orchestrator] Launched single agent {agent_config.agent_id}.")
         self._wait_for_all([proc], [hard_deadline])
         print("[orchestrator] Single agent finished.")
-        self._finalize_single_long(experiment_dir, agent_config)
+        self._finalize_single_mode(experiment_dir, agent_config)
 
     def run_merge(
         self,
@@ -244,65 +245,56 @@ class Orchestrator:
             workspace_path=workspace,
             branch_name=branch_name,
             train_budget_seconds=agent_config.train_time_budget_seconds,
+            train_max_steps=agent_config.train_max_steps,
             run_id=run_id,
             agent_id=agent_config.agent_id,
             results_root=results_root,
             slurm_partition=self.config.slurm_partition,
             slurm_gres=self.config.slurm_gres,
             slurm_time=self.config.slurm_time,
+            use_slurm=self.config.slurm_enabled,
             agent_time_budget_minutes=agent_config.time_budget_minutes,
+            experiment_mode=self.config.mode,
+            evaluator_lock_path=(
+                mode_dir.parent / "evaluator.lock"
+                if self.config.evaluator_concurrency == "serialized"
+                else None
+            ),
         )
         (agent_dir / "logs").mkdir(parents=True, exist_ok=True)
         return agent_dir, workspace
 
-    def _finalize_single_long(
+    def _finalize_single_mode(
         self, experiment_dir: Path, agent_config: AgentConfig
     ) -> None:
-        """Post-run finalization for single_long mode.
+        """Post-run finalization for single-agent modes.
 
-        Reads results/results.tsv from the agent workspace, identifies the
-        best val_bpb commit, checks it out in the workspace, and writes a
-        final report.  Runs after the agent process exits so it never races
-        with an active agent.
+        Prefer the structured per-run log emitted by the runner so we capture the
+        actual commit used for each training attempt. Fall back to workspace
+        results.tsv only if structured data is unavailable.
         """
-        import csv
         import subprocess as _sp
 
-        agent_dir = experiment_dir / "mode_single_long" / agent_config.agent_id
+        agent_dir = experiment_dir / f"mode_{self.config.mode}" / agent_config.agent_id
         workspace = agent_dir / "workspace"
         results_tsv = workspace / "results" / "results.tsv"
+        training_runs_path = agent_dir / "results" / "training_runs.jsonl"
         report_path = agent_dir / "final_report.txt"
 
-        print("[orchestrator] Running single_long finalization...")
+        print(f"[orchestrator] Running {self.config.mode} finalization...")
 
-        if not results_tsv.exists():
-            print("[orchestrator] No results.tsv found — skipping finalization.")
+        rows, source = self._collect_single_mode_results(
+            workspace=workspace,
+            training_runs_path=training_runs_path,
+            results_tsv_path=results_tsv,
+        )
+        if not rows:
+            print("[orchestrator] No usable run records found — skipping finalization.")
             return
 
-        # Parse results.tsv for the best (lowest) val_bpb commit
-        best_commit: Optional[str] = None
-        best_bpb: Optional[float] = None
-        rows: list[dict] = []
-        try:
-            with open(results_tsv) as f:
-                reader = csv.DictReader(f, delimiter="\t")
-                for row in reader:
-                    rows.append(row)
-                    try:
-                        bpb = float(row["val_bpb"])
-                        if best_bpb is None or bpb < best_bpb:
-                            best_bpb = bpb
-                            best_commit = row["commit"]
-                    except (KeyError, ValueError):
-                        pass
-        except Exception as e:
-            print(f"[orchestrator] Failed to parse results.tsv: {e}")
-            return
-
-        if best_commit is None:
-            print("[orchestrator] No valid val_bpb rows in results.tsv — skipping.")
-            return
-
+        best_row = min(rows, key=lambda row: row["val_bpb"])
+        best_commit = str(best_row["commit"])
+        best_bpb = float(best_row["val_bpb"])
         print(f"[orchestrator] Best result: commit={best_commit} val_bpb={best_bpb}")
 
         # Checkout the best commit in the workspace
@@ -320,10 +312,11 @@ class Orchestrator:
         # Write final report
         ts = datetime.now(timezone.utc).isoformat()
         lines = [
-            f"single_long finalization report",
+            f"{self.config.mode} finalization report",
             f"experiment:   {experiment_dir.name}",
             f"agent:        {agent_config.agent_id}",
             f"timestamp:    {ts}",
+            f"source:       {source}",
             f"best_commit:  {best_commit}",
             f"best_val_bpb: {best_bpb}",
             f"total_runs:   {len(rows)}",
@@ -332,13 +325,182 @@ class Orchestrator:
         ]
         for row in rows:
             lines.append(
-                f"  {row.get('commit','?')[:8]}  val_bpb={row.get('val_bpb','?'):>10}  "
+                f"  {str(row.get('commit', '?'))[:8]}  val_bpb={float(row['val_bpb']):>10.6f}  "
                 f"{row.get('description','')}"
             )
         report_path.write_text("\n".join(lines) + "\n")
         print(f"[orchestrator] Final report written to {report_path}")
 
+    def _collect_single_mode_results(
+        self,
+        workspace: Path,
+        training_runs_path: Path,
+        results_tsv_path: Path,
+    ) -> tuple[list[dict], str]:
+        """Collect finalization rows from structured logs or workspace fallback."""
+        training_rows = self._load_training_run_rows(workspace, training_runs_path)
+        if training_rows:
+            return training_rows, "training_runs.jsonl"
+
+        tsv_rows = self._load_results_tsv_rows(results_tsv_path)
+        if tsv_rows:
+            return tsv_rows, "workspace/results.tsv"
+
+        return [], "none"
+
+    def _load_training_run_rows(
+        self,
+        workspace: Path,
+        training_runs_path: Path,
+    ) -> list[dict]:
+        """Return successful training runs with commit ids attached."""
+        if not training_runs_path.exists():
+            return []
+
+        commit_messages = self._git_commit_messages(workspace)
+        reflog_entries = self._git_reflog_entries(workspace)
+        rows: list[dict] = []
+
+        try:
+            for raw_line in training_runs_path.read_text().splitlines():
+                if not raw_line.strip():
+                    continue
+                entry = json.loads(raw_line)
+                val_bpb = entry.get("val_bpb")
+                if val_bpb is None:
+                    continue
+                try:
+                    val_bpb_float = float(val_bpb)
+                except (TypeError, ValueError):
+                    continue
+
+                commit = entry.get("commit")
+                if not commit:
+                    commit = self._infer_commit_from_reflog(
+                        reflog_entries, entry.get("started_at")
+                    )
+                if not commit:
+                    continue
+
+                rows.append(
+                    {
+                        "commit": commit,
+                        "val_bpb": val_bpb_float,
+                        "description": commit_messages.get(commit, ""),
+                    }
+                )
+        except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
+            print(f"[orchestrator] Failed to parse training_runs.jsonl: {exc}")
+            return []
+
+        return rows
+
+    def _load_results_tsv_rows(self, results_tsv_path: Path) -> list[dict]:
+        """Fallback: parse workspace results.tsv."""
+        if not results_tsv_path.exists():
+            return []
+
+        rows: list[dict] = []
+        try:
+            with open(results_tsv_path) as f:
+                reader = csv.DictReader(f, delimiter="\t")
+                for row in reader:
+                    try:
+                        val_bpb = float(row["val_bpb"])
+                        commit = row["commit"]
+                    except (KeyError, TypeError, ValueError):
+                        continue
+                    rows.append(
+                        {
+                            "commit": commit,
+                            "val_bpb": val_bpb,
+                            "description": row.get("description", ""),
+                        }
+                    )
+        except OSError as exc:
+            print(f"[orchestrator] Failed to parse results.tsv: {exc}")
+            return []
+
+        return rows
+
+    def _git_reflog_entries(self, workspace: Path) -> list[tuple[float, str]]:
+        """Return reflog entries as (epoch_seconds, commit), oldest first."""
+        try:
+            proc = subprocess.run(
+                [
+                    "git",
+                    "reflog",
+                    "--date=unix",
+                    "--format=%H%x09%gd",
+                ],
+                cwd=workspace,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except (OSError, subprocess.SubprocessError):
+            return []
+
+        entries: list[tuple[float, str]] = []
+        for line in proc.stdout.splitlines():
+            if not line.strip():
+                continue
+            try:
+                commit, selector = line.split("\t", 1)
+                ts_fragment = selector.split("@{", 1)[1].rstrip("}")
+                entries.append((float(ts_fragment), commit.strip()))
+            except (IndexError, ValueError):
+                continue
+
+        entries.sort(key=lambda item: item[0])
+        return entries
+
+    def _infer_commit_from_reflog(
+        self,
+        reflog_entries: list[tuple[float, str]],
+        started_at: object,
+    ) -> Optional[str]:
+        """Infer the HEAD commit at a training run's start time."""
+        try:
+            started_at_float = float(started_at)
+        except (TypeError, ValueError):
+            return None
+
+        chosen: Optional[str] = None
+        for ts, commit in reflog_entries:
+            if ts <= started_at_float:
+                chosen = commit
+            else:
+                break
+        return chosen
+
+    def _git_commit_messages(self, workspace: Path) -> dict[str, str]:
+        """Return commit subject lines keyed by full hash."""
+        try:
+            proc = subprocess.run(
+                ["git", "log", "--format=%H%x09%s", "-n", "200"],
+                cwd=workspace,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except (OSError, subprocess.SubprocessError):
+            return {}
+
+        messages: dict[str, str] = {}
+        for line in proc.stdout.splitlines():
+            if not line.strip():
+                continue
+            try:
+                commit, subject = line.split("\t", 1)
+            except ValueError:
+                continue
+            messages[commit.strip()] = subject.strip()
+        return messages
+
     def _validate_gpu_assignments(self) -> None:
+        if self.config.evaluator_concurrency == "serialized":
+            return
         devices = [a.cuda_device for a in self.config.agents]
         if len(devices) != len(set(devices)):
             raise ValueError(

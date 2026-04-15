@@ -1,0 +1,9 @@
+---
+val_loss:          0.918995
+val_bpb:           0.918995
+val_accuracy:      0.6864
+training_seconds:  120.0
+total_seconds:     136.1
+total_steps:       2139
+total_epochs:      3
+param_count:       357034
